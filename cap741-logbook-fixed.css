@@ -201,7 +201,7 @@
     @media print {
       @page { size:A5 landscape; margin:0; }
       html, body { width:var(--page-w); height:var(--page-h); background:#fff; }
-      .error, .print-fab, .add-fab, .load-fab, .filter-fab, .save-fab, .settings-fab, .info-fab, .print-options, .filter-strip, .modal-backdrop, .loading-overlay, .task-expand { display:none !important; }
+      .error, .print-fab, .add-fab, .load-fab, .filter-fab, .save-fab, .settings-fab, .info-fab, .print-options, .filter-strip, .modal-backdrop, .loading-overlay, .task-expand, .sup-clear { display:none !important; }
       body.print-current .page.print-exclude { display:none !important; }
       .pages { padding:0; }
       .page {
@@ -251,3 +251,4 @@
         display:none !important;
       }
     }
+
