@@ -397,12 +397,32 @@
       async function flushLinkedRewrite(force){ if(!hasUnsavedChanges&&!force) return; captureActiveEditorState(); if(saveInFlight){ saveQueued=true; return; } saveInFlight=true; syncSaveButtonState(true); try { clearFail(); await writeXlsx(); refreshUnsavedChangesState(); } catch(e){ fail('Could not save: '+e.message); } finally { saveInFlight=false; syncSaveButtonState(false); if(saveQueued){ saveQueued=false; flushLinkedRewrite(true); } } }
 
       // ---- Settings modal with tabs ----
-      function settingsTableRow(cells, kind){ var html='<tr>'; for(var i=0;i<cells.length;i++) html+='<td>'+cells[i]+'</td>'; html+='<td><button type="button" class="settings-remove-btn" data-settings-remove="'+esc(kind)+'">&#x2715;</button></td></tr>'; return html; }
+      function settingsTableRow(cells, kind, rowAttrs){ var html='<tr'+(rowAttrs?' '+rowAttrs:'')+'>'; for(var i=0;i<cells.length;i++) html+='<td>'+cells[i]+'</td>'; html+='<td><button type="button" class="settings-remove-btn" data-settings-remove="'+esc(kind)+'">&#x2715;</button></td></tr>'; return html; }
+      function nextSupervisorNumericId(records){ var max=0; for(var i=0;i<(records||[]).length;i++){ var id=parseInt(s(records[i]&&records[i].id),10); if(isFinite(id)&&id>max) max=id; } return max+1; }
+      function todaySupervisorDate(){ var now=new Date(); var iso=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0'); return formatDateDisplay(iso); }
       function renderSettingsRows(kind){ var html=''; if(kind==='aircraft'){ var list=aircraftWorkbookRows(); for(var i=0;i<list.length;i++) html+=settingsTableRow(['<input type="text" data-col="Group" value="'+esc(list[i].Group)+'">','<input type="text" data-col="A/C Reg" value="'+esc(list[i]['A/C Reg'])+'">','<input type="text" data-col="Aircraft Type" value="'+esc(list[i]['Aircraft Type'])+'">'],kind); }
       if(kind==='chapters'){ var ch=chapterWorkbookRows(); for(var j=0;j<ch.length;j++) html+=settingsTableRow(['<input type="text" data-col="Chapter" value="'+esc(ch[j].Chapter)+'">','<input type="text" data-col="Description" value="'+esc(ch[j].Description)+'">'],kind); }
-      if(kind==='supervisors'){ var su=supervisorWorkbookRows(); for(var k=0;k<su.length;k++) html+=settingsTableRow(['<input type="text" data-col="ID" value="'+esc(su[k].ID)+'">','<input type="text" data-col="Signatory Name" value="'+esc(su[k]['Signatory Name'])+'">','<input type="text" data-col="Stamp" value="'+esc(su[k].Stamp)+'">','<input type="text" data-col="License Number" value="'+esc(su[k]['License Number'])+'">','<input type="text" data-col="Scope / Limitations" value="'+esc(su[k]['Scope / Limitations'])+'">','<input type="text" data-col="Date" value="'+esc(su[k].Date)+'">'],kind); }
+      if(kind==='supervisors'){ var su=supervisorWorkbookRows(); for(var k=0;k<su.length;k++) html+=settingsTableRow(['<input type="text" data-col="Signatory Name" value="'+esc(su[k]['Signatory Name'])+'">','<input type="text" data-col="Stamp" value="'+esc(su[k].Stamp)+'">','<input type="text" data-col="License Number" value="'+esc(su[k]['License Number'])+'">','<input type="text" data-col="Scope / Limitations" value="'+esc(su[k]['Scope / Limitations'])+'">'],kind,'data-supervisor-id="'+esc(su[k].ID)+'" data-supervisor-date="'+esc(su[k].Date)+'"'); }
       return html; }
       function collectSettingsTable(kind){ var tbody=settingsBodyEl&&settingsBodyEl.querySelector('[data-settings-table="'+kind+'"] tbody'),out=[]; if(!tbody) return out; var trs=tbody.querySelectorAll('tr'); for(var i=0;i<trs.length;i++){ var obj={},hasValue=false,inputs=trs[i].querySelectorAll('[data-col]'); for(var j=0;j<inputs.length;j++){ var key=inputs[j].getAttribute('data-col'),value=s(inputs[j].value); if(value) hasValue=true; obj[key]=value; } if(hasValue) out.push(obj); } return out; }
+      function collectSupervisorSettingsTable(){
+        var tbody=settingsBodyEl&&settingsBodyEl.querySelector('[data-settings-table="supervisors"] tbody'),out=[];
+        if(!tbody) return out;
+        var nextId=nextSupervisorNumericId(SUPERVISOR_RECORDS),trs=tbody.querySelectorAll('tr');
+        for(var i=0;i<trs.length;i++){
+          var tr=trs[i],obj={},hasValue=false,inputs=tr.querySelectorAll('[data-col]');
+          for(var j=0;j<inputs.length;j++){
+            var key=inputs[j].getAttribute('data-col'),value=s(inputs[j].value);
+            if(value) hasValue=true;
+            obj[key]=value;
+          }
+          if(!hasValue) continue;
+          obj.ID=s(tr.getAttribute('data-supervisor-id'))||String(nextId++);
+          obj.Date=s(tr.getAttribute('data-supervisor-date'))||todaySupervisorDate();
+          out.push(obj);
+        }
+        return out;
+      }
       function renderSettingsBody(tab){
         settingsActiveTab=tab||'owner';
         var TABS=[{id:'owner',label:'Owner'},{id:'aircraft',label:'Aircraft'},{id:'supervisors',label:'Supervisors'},{id:'chapters',label:'Chapters'}];
@@ -415,7 +435,7 @@
         } else if(settingsActiveTab==='aircraft'){
           panelHtml='<div class="settings-tab-panel"><p class="settings-panel-copy">Manage aircraft registration, type, and group. Registration is used to auto-fill Aircraft Type when entering A/C Reg.</p><div class="settings-panel-toolbar"><button class="settings-add-row" type="button" data-settings-add="aircraft">+ Add aircraft</button></div><div class="settings-table-wrap"><table class="settings-table" data-settings-table="aircraft"><thead><tr><th>Group</th><th>A/C Reg</th><th>Aircraft Type</th><th></th></tr></thead><tbody>'+renderSettingsRows('aircraft')+'</tbody></table></div></div>';
         } else if(settingsActiveTab==='supervisors'){
-          panelHtml='<div class="settings-tab-panel"><p class="settings-panel-copy">Manage supervisor names, stamps, and licence numbers. These appear in the Supervisor dropdown when adding entries.</p><div class="settings-panel-toolbar"><button class="settings-add-row" type="button" data-settings-add="supervisors">+ Add supervisor</button></div><div class="settings-table-wrap"><table class="settings-table" data-settings-table="supervisors"><thead><tr><th>ID</th><th>Name</th><th>Stamp</th><th>Licence</th><th>Scope</th><th>Date</th><th></th></tr></thead><tbody>'+renderSettingsRows('supervisors')+'</tbody></table></div></div>';
+          panelHtml='<div class="settings-tab-panel"><p class="settings-panel-copy">Manage supervisor names, stamps, and licence numbers. The app keeps ID numbers and save dates automatically in the background.</p><div class="settings-panel-toolbar"><button class="settings-add-row" type="button" data-settings-add="supervisors">+ Add supervisor</button></div><div class="settings-table-wrap"><table class="settings-table" data-settings-table="supervisors"><thead><tr><th>Name</th><th>Stamp</th><th>Licence</th><th>Scope</th><th></th></tr></thead><tbody>'+renderSettingsRows('supervisors')+'</tbody></table></div></div>';
         } else if(settingsActiveTab==='chapters'){
           panelHtml='<div class="settings-tab-panel"><p class="settings-panel-copy">Manage ATA chapter numbers and descriptions. These appear in the Chapter dropdown on pages and filters.</p><div class="settings-panel-toolbar"><button class="settings-add-row" type="button" data-settings-add="chapters">+ Add chapter</button></div><div class="settings-table-wrap"><table class="settings-table" data-settings-table="chapters"><thead><tr><th>Chapter</th><th>Description</th><th></th></tr></thead><tbody>'+renderSettingsRows('chapters')+'</tbody></table></div></div>';
         }
@@ -426,7 +446,7 @@
       }
       function openSettingsModal(){ if(!settingsModal||!settingsBodyEl) return; renderSettingsBody(settingsActiveTab); settingsModal.className='modal-backdrop open'; }
       function closeSettingsModal(){ if(settingsModal) settingsModal.className='modal-backdrop'; }
-      function addSettingsRow(kind){ var tbody=settingsBodyEl&&settingsBodyEl.querySelector('[data-settings-table="'+kind+'"] tbody'); if(!tbody) return; var rowHtml=kind==='aircraft'?settingsTableRow(['<input type="text" data-col="Group" placeholder="Group">','<input type="text" data-col="A/C Reg" placeholder="G-XXXX">','<input type="text" data-col="Aircraft Type" placeholder="Boeing 777-300ER - GE90">'],kind):(kind==='chapters'?settingsTableRow(['<input type="text" data-col="Chapter" placeholder="e.g. 71">','<input type="text" data-col="Description" placeholder="e.g. Power Plant">'],kind):settingsTableRow(['<input type="text" data-col="ID" placeholder="ID">','<input type="text" data-col="Signatory Name" placeholder="Name">','<input type="text" data-col="Stamp" placeholder="Stamp">','<input type="text" data-col="License Number" placeholder="Licence No.">','<input type="text" data-col="Scope / Limitations" placeholder="Scope">','<input type="text" data-col="Date" placeholder="Date">'],kind)); tbody.insertAdjacentHTML('beforeend',rowHtml); tbody.lastElementChild.querySelector('input') && tbody.lastElementChild.querySelector('input').focus(); }
+      function addSettingsRow(kind){ var tbody=settingsBodyEl&&settingsBodyEl.querySelector('[data-settings-table="'+kind+'"] tbody'); if(!tbody) return; var rowHtml=kind==='aircraft'?settingsTableRow(['<input type="text" data-col="Group" placeholder="Group">','<input type="text" data-col="A/C Reg" placeholder="G-XXXX">','<input type="text" data-col="Aircraft Type" placeholder="Boeing 777-300ER - GE90">'],kind):(kind==='chapters'?settingsTableRow(['<input type="text" data-col="Chapter" placeholder="e.g. 71">','<input type="text" data-col="Description" placeholder="e.g. Power Plant">'],kind):settingsTableRow(['<input type="text" data-col="Signatory Name" placeholder="Name">','<input type="text" data-col="Stamp" placeholder="Stamp">','<input type="text" data-col="License Number" placeholder="Licence No.">','<input type="text" data-col="Scope / Limitations" placeholder="Scope">'],kind)); tbody.insertAdjacentHTML('beforeend',rowHtml); tbody.lastElementChild.querySelector('input[data-col]') && tbody.lastElementChild.querySelector('input[data-col]').focus(); }
       function saveSettingsFromModal(){
         // Save owner info (only available on owner tab; store from DOM if on that tab, else use cached)
         var ownerNameEl=settingsBodyEl.querySelector('#settingsOwnerName');
@@ -438,7 +458,7 @@
         } else if(settingsActiveTab==='chapters'){
           applyChapterRows(collectSettingsTable('chapters').map(function(r){ return {chapter:r.Chapter,description:r.Description}; }));
         } else if(settingsActiveTab==='supervisors'){
-          rebuildSupervisorState(collectSettingsTable('supervisors').map(function(r){ return {id:r.ID,name:r['Signatory Name'],stamp:r.Stamp,licence:r['License Number'],scope:r['Scope / Limitations'],date:r.Date}; }));
+          rebuildSupervisorState(collectSupervisorSettingsTable().map(function(r){ return {id:r.ID,name:r['Signatory Name'],stamp:r.Stamp,licence:r['License Number'],scope:r['Scope / Limitations'],date:r.Date}; }));
         }
         markSharedDatalistsDirty();
         settingsDirty=true;

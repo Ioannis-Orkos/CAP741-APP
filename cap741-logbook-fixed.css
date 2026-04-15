@@ -49,10 +49,10 @@
     .dots-label { flex:0 0 auto; }
     .dots-line { flex:1 1 auto; border-bottom:1px dotted #222; height:1.15em; min-width:30px; position:relative; overflow:visible; }
     .dots-line span,
-    .dots-line .dots-value { position:absolute; left:50%; bottom:1px; transform:translateX(-50%); display:block; max-width:100%; background:#fff; padding:0 .45ch; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:center; line-height:1.05; }
+    .dots-line .dots-value { position:absolute; left:50%; bottom:1px; transform:translateX(-50%); display:block; max-width:100%; background:rgba(255,255,255,.7); padding:0 .45ch; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:center; line-height:1.05; }
     .editable-dots-line { cursor:text; }
-    .editable-dots-line .dots-value { left:0; right:0; transform:none; max-width:none; padding:0 .2ch; }
-    .editable-dots-line .dots-input { width:100%; min-width:0; max-width:none; cursor:text; }
+    .editable-dots-line .dots-value { left:50%; right:auto; transform:translateX(-50%); max-width:100%; padding:0 .45ch; }
+    .editable-dots-line .dots-input { width:auto; min-width:8ch; max-width:100%; text-align:center; cursor:text; }
     .subnote { font-size:7.5px; line-height:1.05; margin:0; }
     .field-stack { display:flex; flex-direction:column; }
     .field-stack.top-pad { padding-top:1px; }
