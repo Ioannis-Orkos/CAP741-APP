@@ -276,7 +276,33 @@
       function openInfoModal(){ if(infoModal) infoModal.className='modal-backdrop open'; }
       function closeInfoModal(){ if(infoModal) infoModal.className='modal-backdrop'; }
       function openTaskDetail(rowId){ lastTaskDetailFocus=document.activeElement&&pagesEl.contains(document.activeElement)?document.activeElement:null; captureActiveEditorState(); var row=rowById(rowId); if(!row) return; lastTaskDetailRowId=rowId; taskDetailRewriteDirty=false; detailChapterEl.value=chapterLabelText(row); detailFaultEl.value=s(row['FAULT']); detailTaskEl.value=s(row['Task Detail']); detailRewriteEl.value=s(row['Rewriten for cap741']||row['Task Detail']); taskDetailModal.className='modal-backdrop open'; }
-      function saveTaskDetail(){ var row=rowById(lastTaskDetailRowId); if(!row) return; row['FAULT']=s(detailFaultEl.value); row['Rewriten for cap741']=s(detailRewriteEl.value)||s(row['Rewriten for cap741'])||s(row['Task Detail']); var parsed=parseChapterValue(detailChapterEl.value); if(parsed.chapter){ row['Chapter']=parsed.chapter; row['Chapter Description']=parsed.chapterDesc; } refreshUnsavedChangesState(); renderAll(); closeTaskDetail(); scheduleAutoSave(); }
+      function readTaskDetailForm(){
+        return {
+          chapter:s(detailChapterEl.value),
+          fault:s(detailFaultEl.value),
+          task:s(detailTaskEl.value),
+          rewrite:s(detailRewriteEl.value)
+        };
+      }
+      function applyTaskDetailForm(row, form){
+        var parsedChapter=parseChapterValue(form.chapter);
+        row['FAULT']=form.fault;
+        row['Task Detail']=form.task;
+        row['Rewriten for cap741']=form.rewrite||form.task;
+        if(parsedChapter.chapter){
+          row['Chapter']=parsedChapter.chapter;
+          row['Chapter Description']=parsedChapter.chapterDesc;
+        }
+      }
+      function saveTaskDetail(){
+        var row=rowById(lastTaskDetailRowId);
+        if(!row) return;
+        applyTaskDetailForm(row,readTaskDetailForm());
+        refreshUnsavedChangesState();
+        renderAll();
+        closeTaskDetail();
+        scheduleAutoSave();
+      }
       function closeTaskDetail(){ taskDetailModal.className='modal-backdrop'; lastTaskDetailRowId=null; if(lastTaskDetailFocus&&document.contains(lastTaskDetailFocus)&&typeof lastTaskDetailFocus.focus==='function'){ try { lastTaskDetailFocus.focus({preventScroll:true}); } catch(e){ try { lastTaskDetailFocus.focus(); } catch(err){} } } lastTaskDetailFocus=null; }
 
       // ---- IndexedDB ----
