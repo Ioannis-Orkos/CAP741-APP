@@ -250,6 +250,8 @@
       function syncDateControl(entry, isoValue){ if(!entry) return; var textInput=entry.querySelector('[data-date-text]'),picker=entry.querySelector('[data-date-picker]'); if(textInput) textInput.value=toDisplayDate(isoValue||''); if(picker&&isoValue!=null) picker.value=isoValue; }
       function wireDateControls(scope){ var entries=scope.querySelectorAll('.date-entry'); for(var i=0;i<entries.length;i++){ (function(entry){ var textInput=entry.querySelector('[data-date-text]'),picker=entry.querySelector('[data-date-picker]'); if(!textInput||!picker) return; var openPicker=function(){ textInput.focus(); if(typeof picker.showPicker==='function'){ try { picker.showPicker(); } catch(e){} } else { picker.click(); } }; entry.addEventListener('click',function(ev){ if(ev.target!==picker) openPicker(); }); picker.addEventListener('change',function(){ syncDateControl(entry,picker.value); }); })(entries[i]); } }
       function openDatePicker(entry){ if(!entry) return; var textInput=entry.querySelector('[data-date-text]'),picker=entry.querySelector('[data-date-picker]'); if(!textInput||!picker) return; textInput.focus(); if(typeof picker.showPicker==='function'){ try { picker.showPicker(); } catch(e){ picker.click(); } } else { picker.click(); } }
+      function autoSizeDetailTextarea(textarea){ if(!textarea) return; textarea.style.height='auto'; textarea.style.height=Math.max(textarea.scrollHeight,0)+'px'; }
+      function autoSizeDetailTextareas(){ autoSizeDetailTextarea(detailFaultEl); autoSizeDetailTextarea(detailTaskEl); autoSizeDetailTextarea(detailRewriteEl); }
 
       // ---- Modal field wiring ----
       function applySupervisorSuggestion(nameInput, licenceInput){ return fillSupervisorFields(nameInput,licenceInput,null); }
@@ -339,7 +341,7 @@
       // ---- Task detail modal ----
       function openInfoModal(){ if(infoModal) infoModal.className='modal-backdrop open'; }
       function closeInfoModal(){ if(infoModal) infoModal.className='modal-backdrop'; }
-      function openTaskDetail(rowId){ lastTaskDetailFocus=document.activeElement&&pagesEl.contains(document.activeElement)?document.activeElement:null; captureActiveEditorState(); var row=rowById(rowId); if(!row) return; lastTaskDetailRowId=rowId; taskDetailRewriteDirty=false; detailChapterEl.value=chapterLabelText(row); detailFaultEl.value=s(row['FAULT']); detailTaskEl.value=s(row['Task Detail']); detailRewriteEl.value=s(row['Rewriten for cap741']||row['Task Detail']); taskDetailModal.className='modal-backdrop open'; }
+      function openTaskDetail(rowId){ lastTaskDetailFocus=document.activeElement&&pagesEl.contains(document.activeElement)?document.activeElement:null; captureActiveEditorState(); var row=rowById(rowId); if(!row) return; lastTaskDetailRowId=rowId; taskDetailRewriteDirty=false; detailChapterEl.value=chapterLabelText(row); detailFaultEl.value=s(row['FAULT']); detailTaskEl.value=s(row['Task Detail']); detailRewriteEl.value=s(row['Rewriten for cap741']||row['Task Detail']); taskDetailModal.className='modal-backdrop open'; if(typeof requestAnimationFrame==='function') requestAnimationFrame(autoSizeDetailTextareas); else autoSizeDetailTextareas(); }
       function showConfirmDialog(title, text, okLabel){ return new Promise(function(resolve){ confirmResolver=resolve; if(confirmTitleEl) confirmTitleEl.textContent=title||'Confirm'; if(confirmTextEl) confirmTextEl.textContent=text||'Are you sure?'; if(confirmOkBtn) confirmOkBtn.textContent=okLabel||'Confirm'; if(confirmModal) confirmModal.className='modal-backdrop open'; }); }
       function closeConfirmDialog(result){ if(confirmModal) confirmModal.className='modal-backdrop'; if(confirmResolver){ var resolve=confirmResolver; confirmResolver=null; resolve(!!result); } }
       function readTaskDetailForm(){
@@ -532,8 +534,9 @@
       closeTaskDetailBtn.onmousedown=function(ev){ ev.preventDefault(); };
       taskDetailModal.onmousedown=function(ev){ if(ev.target===taskDetailModal||ev.target.closest('.detail-modal-close')) ev.preventDefault(); };
       if(saveTaskDetailBtn) saveTaskDetailBtn.onclick=saveTaskDetail;
-      if(detailTaskEl) detailTaskEl.addEventListener('input',function(){ if(!taskDetailRewriteDirty) detailRewriteEl.value=detailTaskEl.value; });
-      if(detailRewriteEl) detailRewriteEl.addEventListener('input',function(){ taskDetailRewriteDirty=true; });
+      if(detailFaultEl) detailFaultEl.addEventListener('input',function(){ autoSizeDetailTextarea(detailFaultEl); });
+      if(detailTaskEl) detailTaskEl.addEventListener('input',function(){ if(!taskDetailRewriteDirty) detailRewriteEl.value=detailTaskEl.value; autoSizeDetailTextarea(detailTaskEl); autoSizeDetailTextarea(detailRewriteEl); });
+      if(detailRewriteEl) detailRewriteEl.addEventListener('input',function(){ taskDetailRewriteDirty=true; autoSizeDetailTextarea(detailRewriteEl); });
       if(confirmCancelBtn) confirmCancelBtn.onclick=function(){ closeConfirmDialog(false); };
       if(confirmOkBtn) confirmOkBtn.onclick=function(){ closeConfirmDialog(true); };
       if(confirmModal) confirmModal.onclick=function(ev){ if(ev.target===confirmModal) closeConfirmDialog(false); };
