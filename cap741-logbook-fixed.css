@@ -50,6 +50,9 @@
     .dots-line { flex:1 1 auto; border-bottom:1px dotted #222; height:1.15em; min-width:30px; position:relative; overflow:visible; }
     .dots-line span,
     .dots-line .dots-value { position:absolute; left:50%; bottom:1px; transform:translateX(-50%); display:block; max-width:100%; background:#fff; padding:0 .45ch; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:center; line-height:1.05; }
+    .editable-dots-line { cursor:text; }
+    .editable-dots-line .dots-value { left:0; right:0; transform:none; max-width:none; padding:0 .2ch; }
+    .editable-dots-line .dots-input { width:100%; min-width:0; max-width:none; cursor:text; }
     .subnote { font-size:7.5px; line-height:1.05; margin:0; }
     .field-stack { display:flex; flex-direction:column; }
     .field-stack.top-pad { padding-top:1px; }
@@ -88,11 +91,11 @@
     .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.55); display:none; align-items:center; justify-content:center; z-index:30; padding:12px; }
     .modal-backdrop.open { display:flex; }
     .modal-shell { width:100%; height:100%; overflow:hidden; background:transparent; border-radius:0; padding:0; box-shadow:none; display:flex; flex-direction:column; position:relative; }
-    .modal-actions { position:absolute; top:-22px; left:12px; width:auto; display:flex; justify-content:flex-end; gap:6px; padding:0; z-index:3; flex:0 0 auto; pointer-events:auto; }
-    .modal-actions button { border:1px solid #777; height:24px; min-width:24px; padding:0 10px; font-size:10px; line-height:22px; font-weight:400; cursor:pointer; border-radius:1px; box-shadow:none; font-family:Arial, Helvetica, sans-serif; background:#fff; color:#111; }
+    .modal-actions { position:absolute; top:-22px; left:12px; width:auto; display:flex; justify-content:flex-end; gap:6px; padding:4px; z-index:3; flex:0 0 auto; pointer-events:auto; border:1px solid rgba(23,55,74,.08); border-radius:10px; background:rgba(255,255,255,.94); box-shadow:0 4px 12px rgba(23,55,74,.08); }
+    .modal-actions button { border:1px solid rgba(23,55,74,.12); height:24px; min-width:24px; padding:0 10px; font-size:10px; line-height:22px; font-weight:400; cursor:pointer; border-radius:7px; box-shadow:none; font-family:Arial, Helvetica, sans-serif; background:rgba(247,249,251,.96); color:#17374a; }
     .btn-save { width:72px; min-width:72px; letter-spacing:0; }
     .btn-cancel { width:24px; min-width:24px; padding:0; font-size:11px; }
-    .modal-actions button:hover { background:#f6f6f6; border-color:#555; }
+    .modal-actions button:hover { background:#ffffff; border-color:rgba(23,55,74,.22); }
     .editable { min-height:1.5em; outline:none; display:block; }
     .editable:focus { background:#fffbe8; box-shadow:inset 0 0 0 1px #d3a300; }
     .field-input, .field-select { width:100%; border:0; background:transparent; font:inherit; color:inherit; padding:0; margin:0; outline:none; text-align:center; }
@@ -118,7 +121,7 @@
     .detail-block { margin-bottom:12px; }
     .detail-label { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px; }
     .detail-input { width:100%; min-height:42px; border:1px solid #bbb; background:#fafafa; padding:8px 9px; font-size:13px; line-height:1.35; font-family:Arial, Helvetica, sans-serif; color:#111; }
-    .detail-textarea { min-height:110px; resize:vertical; }
+    .detail-textarea { min-height:54px; resize:vertical; }
     .detail-actions { display:flex; justify-content:flex-end; margin-top:8px; }
     .detail-save { min-height:40px; padding:0 14px; border:1px solid #1d425a; background:#17374a; color:#fff; font-size:13px; font-weight:700; cursor:pointer; }
     .filter-backdrop { align-items:center; justify-content:center; padding:24px; background:rgba(236,241,245,.72); backdrop-filter:blur(3px); }
