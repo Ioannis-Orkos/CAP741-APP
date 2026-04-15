@@ -226,6 +226,7 @@
       function fitModalPreview(){ var preview=modalBody.querySelector('.modal-preview'),page=modalBody.querySelector('.page'); if(!preview||!page||!modalBody) return; page.style.transform='none'; page.style.transformOrigin='top left'; var availableWidth=Math.max(0,modalBody.clientWidth-16),availableHeight=Math.max(0,modalBody.clientHeight-16),pageWidth=page.offsetWidth||1123,pageHeight=page.offsetHeight||794,scale=Math.min(availableWidth/pageWidth,availableHeight/pageHeight,1); if(!isFinite(scale)||scale<=0) scale=0.5; preview.style.width=Math.round(pageWidth*scale)+'px'; preview.style.height=Math.round(pageHeight*scale)+'px'; page.style.transform='scale('+scale+')'; page.style.margin='0'; if(modalActions&&modalShell){ var previewRect=preview.getBoundingClientRect(),shellRect=modalShell.getBoundingClientRect(),contentRightInset=Math.round(24*scale),contentTopInset=Math.round(2*scale); modalActions.style.width='auto'; modalActions.style.top=Math.round(previewRect.top-shellRect.top+contentTopInset)+'px'; modalActions.style.left=Math.round(previewRect.right-shellRect.left-modalActions.offsetWidth-contentRightInset)+'px'; } }
       function textOf(node){ return node&&typeof node.innerText==='string'?node.innerText.trim():''; }
       function valueOf(node){ if(!node) return ''; if(typeof node.value==='string') return node.value.trim(); return textOf(node); }
+      function focusInputAtEnd(input){ if(!input||typeof input.focus!=='function') return; input.focus(); if(typeof input.setSelectionRange==='function'){ var end=input.value.length; try { input.setSelectionRange(end,end); } catch(e){} } }
 
       // ---- Date control wiring ----
       function syncDateControl(entry, isoValue){ if(!entry) return; var textInput=entry.querySelector('[data-date-text]'),picker=entry.querySelector('[data-date-picker]'); if(textInput) textInput.value=toDisplayDate(isoValue||''); if(picker&&isoValue!=null) picker.value=isoValue; }
@@ -244,6 +245,16 @@
         if(typeHead){ typeHead.addEventListener('input',function(){ syncDotsInputSize(this); syncModalAircraftRegList(valueOf(this)); }); typeHead.addEventListener('change',function(){ syncModalAircraftRegList(valueOf(this)); }); }
         var chapterHead=modalBody.querySelector('[data-head="chapter"]');
         if(chapterHead) chapterHead.addEventListener('input',function(){ syncDotsInputSize(this); });
+        var headerInputs=modalBody.querySelectorAll('[data-head]');
+        for(var h=0;h<headerInputs.length;h++){
+          (function(input){
+            var line=input.closest('.dots-line');
+            if(!line) return;
+            line.addEventListener('click',function(ev){
+              if(ev.target!==input) focusInputAtEnd(input);
+            });
+          })(headerInputs[h]);
+        }
         var regFields=modalBody.querySelectorAll('[data-field="reg"]');
         for(var i=0;i<regFields.length;i++){ regFields[i].addEventListener('input',function(){ var th=modalBody.querySelector('[data-head="type"]'); if(th){ th.value=AIRCRAFT_MAP[s(this.value).toUpperCase()]||''; syncDotsInputSize(th); syncModalAircraftRegList(valueOf(th)); } }); }
         var clickToEditFields=['job','task'];
