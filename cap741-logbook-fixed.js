@@ -203,7 +203,7 @@
 
       // ---- Render helpers ----
       function linesFor(text, width){ var t=s(text); if(!t) return 1; var parts=t.split(/\r?\n/); var n=0; for(var i=0;i<parts.length;i++) n+=Math.max(1,Math.ceil(parts[i].length/Math.max(1,width))); return n; }
-      function mainPageTaskText(row){ return s(row['Rewriten for cap741']); }
+      function mainPageTaskText(row){ return s(row['Rewriten for cap741']||row['Task Detail']); }
       function unitsFor(row){ var task=linesFor(mainPageTaskText(row),ROW_TASK_CHARS),base=Math.max(task,2); return Math.max(1,Math.min(PAGE_SLOTS,Math.ceil(base/ROW_LINES_PER_SLOT))); }
       function dotsInputSize(value){ return Math.max(8,Math.min(56,s(value).length+1)); }
       function renderDotsInput(value, extraAttrs){ return '<span class="dots-value"><input class="field-input dots-input" type="text" size="'+dotsInputSize(value)+'" value="'+esc(value||'')+'"'+(extraAttrs||'')+'></span>'; }
@@ -703,3 +703,4 @@
         setLoadingState(false);
       })();
     })();
+
