@@ -225,7 +225,9 @@
 .settings-save { min-height:42px; border:1px solid #1d425a; background:#17374a; color:#fff; padding:0 16px; font-size:13px; font-weight:700; cursor:pointer; }
 .settings-save:hover { background:#1a3f56; }
     .empty-state { width:min(var(--page-w), calc(100vw - 24px)); margin:16px auto 20px; padding:22px 24px; background:linear-gradient(135deg, #ffffff 0%, #f5f9fc 100%); border:1px solid #c7d5e0; box-shadow:0 10px 24px rgba(23,55,74,.1); }
+    .empty-state-blank { min-height:calc(100vh - 150px); display:flex; align-items:center; justify-content:center; margin:0 auto 20px; padding:24px; background:transparent; border:0; box-shadow:none; }
     .empty-state-title { font-size:20px; font-weight:700; color:#122a39; margin:0 0 8px; }
+    .empty-state-blank .empty-state-title { margin:0; padding:18px 28px; border:1px solid #d6e0e7; background:linear-gradient(180deg, rgba(255,255,255,.96) 0%, rgba(247,251,253,.96) 100%); box-shadow:0 14px 34px rgba(23,55,74,.08); color:#183547; font-size:24px; letter-spacing:.01em; text-align:center; }
     .empty-state-copy { font-size:14px; line-height:1.5; color:#4f6471; margin:0 0 14px; }
     .empty-state button { border:1px solid #27485f; background:#17374a; color:#fff; padding:10px 14px; font-size:13px; font-weight:700; cursor:pointer; }
     @media print {
