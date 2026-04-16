@@ -203,6 +203,24 @@
       .search-shell { top:10px; width:min(290px, calc(100vw - 120px)); }
       .search-box { min-height:36px; padding-left:10px; }
       .pages { padding-top:52px; }
+      .google-sheet-card { width:calc(100vw - 20px); padding:18px 16px 16px; }
+      .google-sheet-close { top:12px; right:12px; width:28px; height:28px; line-height:26px; }
+      .google-sheet-title { margin-right:38px; font-size:17px; }
+      .google-sheet-copy { margin-bottom:12px; font-size:12px; }
+      .google-sheet-input { height:42px; min-height:42px; padding:0 12px; font-size:12px; }
+      .google-sheet-link-row { padding:10px 12px; }
+      .google-sheet-note { font-size:11px; }
+      .google-sheet-actions { gap:8px; }
+      .google-sheet-actions button { flex:1 1 0; min-width:0; }
+    }
+    @media (max-width: 480px) {
+      .google-sheet-card { width:calc(100vw - 16px); padding:16px 14px 14px; }
+      .google-sheet-title { font-size:16px; }
+      .google-sheet-copy { font-size:11px; }
+      .google-sheet-field label { font-size:9px; }
+      .google-sheet-input { height:40px; min-height:40px; border-radius:9px; }
+      .google-sheet-actions { flex-direction:column; }
+      .google-sheet-actions button { width:100%; }
     }
     @media (min-width: 720px) {
       .filter-form { grid-template-columns:1fr 1fr; column-gap:12px; row-gap:10px; }
