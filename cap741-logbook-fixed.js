@@ -89,6 +89,7 @@
       var lastTaskDetailFocus = null;
       var lastTaskDetailRowId = null;
       var taskDetailRewriteDirty = false;
+      var taskDetailOriginalState = null;
       var rowsById = Object.create(null);
       var nextRowIdValue = 0;
       var sharedDatalistsCache = '';
@@ -341,7 +342,10 @@
       // ---- Task detail modal ----
       function openInfoModal(){ if(infoModal) infoModal.className='modal-backdrop open'; }
       function closeInfoModal(){ if(infoModal) infoModal.className='modal-backdrop'; }
-      function openTaskDetail(rowId){ lastTaskDetailFocus=document.activeElement&&pagesEl.contains(document.activeElement)?document.activeElement:null; captureActiveEditorState(); var row=rowById(rowId); if(!row) return; lastTaskDetailRowId=rowId; taskDetailRewriteDirty=false; detailChapterEl.value=chapterLabelText(row); detailFaultEl.value=s(row['FAULT']); detailTaskEl.value=s(row['Task Detail']); detailRewriteEl.value=s(row['Rewriten for cap741']||row['Task Detail']); taskDetailModal.className='modal-backdrop open'; if(typeof requestAnimationFrame==='function') requestAnimationFrame(autoSizeDetailTextareas); else autoSizeDetailTextareas(); }
+      function taskDetailStateFromRow(row){ return { chapter:s(row['Chapter']), chapterDesc:s(row['Chapter Description']), fault:s(row['FAULT']), task:s(row['Task Detail']), rewrite:s(row['Rewriten for cap741']) }; }
+      function restoreTaskDetailState(row, state){ if(!row||!state) return; row['Chapter']=state.chapter; row['Chapter Description']=state.chapterDesc; row['FAULT']=state.fault; row['Task Detail']=state.task; row['Rewriten for cap741']=state.rewrite; }
+      function previewTaskDetailForm(){ var row=rowById(lastTaskDetailRowId); if(!row) return; applyTaskDetailForm(row,readTaskDetailForm()); renderAll(); }
+      function openTaskDetail(rowId){ lastTaskDetailFocus=document.activeElement&&pagesEl.contains(document.activeElement)?document.activeElement:null; captureActiveEditorState(); var row=rowById(rowId); if(!row) return; lastTaskDetailRowId=rowId; taskDetailOriginalState=taskDetailStateFromRow(row); taskDetailRewriteDirty=false; detailChapterEl.value=chapterLabelText(row); detailFaultEl.value=s(row['FAULT']); detailTaskEl.value=s(row['Task Detail']); detailRewriteEl.value=s(row['Rewriten for cap741']||row['Task Detail']); taskDetailModal.className='modal-backdrop open'; if(typeof requestAnimationFrame==='function') requestAnimationFrame(autoSizeDetailTextareas); else autoSizeDetailTextareas(); }
       function showConfirmDialog(title, text, okLabel){ return new Promise(function(resolve){ confirmResolver=resolve; if(confirmTitleEl) confirmTitleEl.textContent=title||'Confirm'; if(confirmTextEl) confirmTextEl.textContent=text||'Are you sure?'; if(confirmOkBtn) confirmOkBtn.textContent=okLabel||'Confirm'; if(confirmModal) confirmModal.className='modal-backdrop open'; }); }
       function closeConfirmDialog(result){ if(confirmModal) confirmModal.className='modal-backdrop'; if(confirmResolver){ var resolve=confirmResolver; confirmResolver=null; resolve(!!result); } }
       function readTaskDetailForm(){
@@ -368,10 +372,10 @@
         applyTaskDetailForm(row,readTaskDetailForm());
         refreshUnsavedChangesState();
         renderAll();
-        closeTaskDetail();
+        closeTaskDetail(true);
         scheduleAutoSave();
       }
-      function closeTaskDetail(){ taskDetailModal.className='modal-backdrop'; lastTaskDetailRowId=null; if(lastTaskDetailFocus&&document.contains(lastTaskDetailFocus)&&typeof lastTaskDetailFocus.focus==='function'){ try { lastTaskDetailFocus.focus({preventScroll:true}); } catch(e){ try { lastTaskDetailFocus.focus(); } catch(err){} } } lastTaskDetailFocus=null; }
+      function closeTaskDetail(keepPreviewChanges){ var row=lastTaskDetailRowId&&rowById(lastTaskDetailRowId); if(!keepPreviewChanges&&row&&taskDetailOriginalState){ restoreTaskDetailState(row,taskDetailOriginalState); renderAll(); } taskDetailModal.className='modal-backdrop'; lastTaskDetailRowId=null; taskDetailOriginalState=null; taskDetailRewriteDirty=false; if(lastTaskDetailFocus&&document.contains(lastTaskDetailFocus)&&typeof lastTaskDetailFocus.focus==='function'){ try { lastTaskDetailFocus.focus({preventScroll:true}); } catch(e){ try { lastTaskDetailFocus.focus(); } catch(err){} } } lastTaskDetailFocus=null; }
 
       // ---- IndexedDB ----
       function withHandleDb(mode){ return new Promise(function(resolve,reject){ if(!window.indexedDB){ reject(new Error('IndexedDB unavailable')); return; } var request=indexedDB.open(DB_NAME,1); request.onupgradeneeded=function(){ var db=request.result; if(!db.objectStoreNames.contains(DB_STORE)) db.createObjectStore(DB_STORE); }; request.onerror=function(){ reject(request.error||new Error('Could not open file-handle store')); }; request.onsuccess=function(){ var db=request.result,tx=db.transaction(DB_STORE,mode),store=tx.objectStore(DB_STORE); resolve({db:db,tx:tx,store:store}); }; }); }
@@ -534,9 +538,10 @@
       closeTaskDetailBtn.onmousedown=function(ev){ ev.preventDefault(); };
       taskDetailModal.onmousedown=function(ev){ if(ev.target===taskDetailModal||ev.target.closest('.detail-modal-close')) ev.preventDefault(); };
       if(saveTaskDetailBtn) saveTaskDetailBtn.onclick=saveTaskDetail;
-      if(detailFaultEl) detailFaultEl.addEventListener('input',function(){ autoSizeDetailTextarea(detailFaultEl); });
-      if(detailTaskEl) detailTaskEl.addEventListener('input',function(){ if(!taskDetailRewriteDirty) detailRewriteEl.value=detailTaskEl.value; autoSizeDetailTextarea(detailTaskEl); autoSizeDetailTextarea(detailRewriteEl); });
-      if(detailRewriteEl) detailRewriteEl.addEventListener('input',function(){ taskDetailRewriteDirty=true; autoSizeDetailTextarea(detailRewriteEl); });
+      if(detailChapterEl) detailChapterEl.addEventListener('input',previewTaskDetailForm);
+      if(detailFaultEl) detailFaultEl.addEventListener('input',function(){ autoSizeDetailTextarea(detailFaultEl); previewTaskDetailForm(); });
+      if(detailTaskEl) detailTaskEl.addEventListener('input',function(){ if(!taskDetailRewriteDirty) detailRewriteEl.value=detailTaskEl.value; autoSizeDetailTextarea(detailTaskEl); autoSizeDetailTextarea(detailRewriteEl); previewTaskDetailForm(); });
+      if(detailRewriteEl) detailRewriteEl.addEventListener('input',function(){ taskDetailRewriteDirty=true; autoSizeDetailTextarea(detailRewriteEl); previewTaskDetailForm(); });
       if(confirmCancelBtn) confirmCancelBtn.onclick=function(){ closeConfirmDialog(false); };
       if(confirmOkBtn) confirmOkBtn.onclick=function(){ closeConfirmDialog(true); };
       if(confirmModal) confirmModal.onclick=function(ev){ if(ev.target===confirmModal) closeConfirmDialog(false); };
@@ -703,4 +708,5 @@
         setLoadingState(false);
       })();
     })();
+
 
