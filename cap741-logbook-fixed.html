@@ -99,9 +99,10 @@
           <label for="filterChapter">Chapter</label>
           <div class="multi-filter" data-filter-box="chapter">
             <div class="multi-filter-chips" id="filterChapterChips"></div>
-            <input class="multi-filter-input" id="filterChapter" type="text" list="chapter-list" autocomplete="off" placeholder="Add chapter" data-filter-key="chapter">
+            <input class="multi-filter-input" id="filterChapter" type="text" list="filter-chapter-list" autocomplete="off" placeholder="Add chapter" data-filter-key="chapter">
           </div>
-          <div class="filter-hint">Use a chapter number, or the full `number - description` text.</div>
+          <datalist id="filter-chapter-list"></datalist>
+          <div class="filter-hint">Use a chapter number, the full `number - description` text, or `No Chapter` for blank chapters.</div>
         </div>
         <div class="filter-actions">
           <button class="filter-clear" id="clearFilters" type="button">Clear</button>
