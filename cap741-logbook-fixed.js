@@ -131,6 +131,7 @@
       var printMode = '';
       var settingsActiveTab = 'owner';
       var loadButtonMode = 'load';
+      var linkedWorkbookName = '';
 
       // ---- Filter state ----
       function emptyFilterState(){ return { aircraftType:[], aircraftReg:[], supervisor:[], chapter:[] }; }
@@ -193,11 +194,14 @@
       function setPrintOptionsOpen(open){ if(!printOptionsEl||!printBtn) return; printOptionsEl.classList.toggle('open',!!open); printOptionsEl.setAttribute('aria-hidden',open?'false':'true'); printBtn.classList.toggle('active',!!open); }
       function syncLoadOptionLabels(){ if(loadExistingBtn) loadExistingBtn.textContent=loadButtonMode==='link'?'Link Existing File':'Load Existing File'; }
       function setLoadOptionsOpen(open){ if(!loadOptionsEl||!loadBtn) return; syncLoadOptionLabels(); loadOptionsEl.classList.toggle('open',!!open); loadOptionsEl.setAttribute('aria-hidden',open?'false':'true'); loadBtn.classList.toggle('active',!!open); }
+      function hasWorkbookDataLoaded(){ return !!(rows.length||AIRCRAFT_GROUP_ROWS.length||CHAPTER_OPTIONS.length||SUPERVISOR_RECORDS.length||s(LOG_OWNER_INFO.name)||s(LOG_OWNER_INFO.signature)||s(LOG_OWNER_INFO.stamp)); }
+      function setLinkedWorkbookName(handle){ linkedWorkbookName=handle&&handleIsWorkbook(handle)?s(handle.name):''; }
       function fail(msg){ errorBox.style.display='block'; errorBox.textContent=msg; document.body.classList.add('has-top-error'); }
       function clearFail(){ errorBox.style.display='none'; errorBox.textContent=''; document.body.classList.remove('has-top-error'); }
       function saveFailureMessage(error){ var message='Could not save: '+(error&&error.message?error.message:'Unknown error.'); if(message.toLowerCase().indexOf('close it in excel')===-1&&message.toLowerCase().indexOf('open in excel')===-1) message+=' If cap741-data.xlsx is open in Excel, close it and try again.'; return message; }
       function filePickerSupported(){ return typeof window.showOpenFilePicker==='function'; }
       function fileSavePickerSupported(){ return typeof window.showSaveFilePicker==='function'; }
+      function syncLoadButtonAvailability(isLinked){ if(isLinked){ setLoadButtonMode('hidden'); return; } if(!filePickerSupported()){ setLoadButtonMode('hidden'); return; } setLoadButtonMode(hasWorkbookDataLoaded()?'link':'load'); }
       function setLoadButtonMode(mode){ if(!loadBtn) return; loadButtonMode=mode||'load'; loadBtn.setAttribute('data-mode',loadButtonMode); if(loadButtonMode==='hidden'){ loadBtn.style.display='none'; setLoadOptionsOpen(false); return; } loadBtn.style.display='block'; loadBtn.textContent=loadButtonMode==='link'?'Link':'Load'; loadBtn.title=loadButtonMode==='link'?'Link Excel workbook for saving or create a new CAP741 file':'Load an existing logbook or create a new CAP741 file'; loadBtn.setAttribute('aria-label',loadButtonMode==='link'?'Link Excel workbook for saving or create a new CAP741 file':'Load an existing logbook or create a new CAP741 file'); syncLoadOptionLabels(); }
       function s(v){ return v==null?'':String(v).trim(); }
       function esc(v){ return s(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
@@ -454,6 +458,7 @@
       function withHandleDb(mode){ return new Promise(function(resolve,reject){ if(!window.indexedDB){ reject(new Error('IndexedDB unavailable')); return; } var request=indexedDB.open(DB_NAME,1); request.onupgradeneeded=function(){ var db=request.result; if(!db.objectStoreNames.contains(DB_STORE)) db.createObjectStore(DB_STORE); }; request.onerror=function(){ reject(request.error||new Error('Could not open file-handle store')); }; request.onsuccess=function(){ var db=request.result,tx=db.transaction(DB_STORE,mode),store=tx.objectStore(DB_STORE); resolve({db:db,tx:tx,store:store}); }; }); }
       async function loadStoredHandle(key){ try { var ctx=await withHandleDb('readonly'); return await new Promise(function(resolve,reject){ var req=ctx.store.get(key); req.onsuccess=function(){ ctx.db.close(); resolve(req.result||null); }; req.onerror=function(){ ctx.db.close(); reject(req.error||new Error('Could not read stored file handle')); }; }); } catch(e){ return null; } }
       async function storeHandle(key, handle){ try { var ctx=await withHandleDb('readwrite'); return await new Promise(function(resolve,reject){ var req=ctx.store.put(handle,key); req.onsuccess=function(){ ctx.db.close(); resolve(true); }; req.onerror=function(){ ctx.db.close(); reject(req.error||new Error('Could not store file handle')); }; }); } catch(e){ return false; } }
+      async function removeStoredHandle(key){ try { var ctx=await withHandleDb('readwrite'); return await new Promise(function(resolve,reject){ var req=ctx.store.delete(key); req.onsuccess=function(){ ctx.db.close(); resolve(true); }; req.onerror=function(){ ctx.db.close(); reject(req.error||new Error('Could not remove stored file handle')); }; }); } catch(e){ return false; } }
       async function ensurePermission(handle){ if(!handle||typeof handle.queryPermission!=='function') return false; var opts={mode:'readwrite'}; if(await handle.queryPermission(opts)==='granted') return true; return await handle.requestPermission(opts)==='granted'; }
       async function pickWorkbookHandle(){
         if(!filePickerSupported()) throw new Error('File picker not supported. Open this page via a local web server (e.g. VS Code Live Server) and use Chrome or Edge.');
@@ -463,6 +468,7 @@
         if(!handleIsWorkbook(handle)) throw new Error('Please choose a .xlsx Excel file.');
         if(!await ensurePermission(handle)) return null;
         await storeHandle(LINKED_FILE_KEY,handle);
+        setLinkedWorkbookName(handle);
         return handle;
       }
       async function pickNewWorkbookHandle(){
@@ -472,6 +478,7 @@
         if(!handleIsWorkbook(handle)) throw new Error('Please save the new workbook as a .xlsx Excel file.');
         if(!await ensurePermission(handle)) return null;
         await storeHandle(LINKED_FILE_KEY,handle);
+        setLinkedWorkbookName(handle);
         return handle;
       }
 
@@ -492,7 +499,7 @@
       function loadWorkbookFromArrayBuffer(buffer){ var workbook=XLSX.read(buffer,{type:'array'}); var logRows=workbookSheetObjects(workbook,'Logbook'); if(logRows.length){ var parsed=[]; for(var i=0;i<logRows.length;i++){ var row={}; for(var j=0;j<LOG_HEADERS.length;j++) row[LOG_HEADERS[j]]=s(logRows[i][LOG_HEADERS[j]]); parsed.push(normalizeLoadedRow(row)); } rows=normalizeRows(parsed); } applyAircraftGroupRows(workbookSheetObjects(workbook,'Aircraft').map(function(r){ return {group:r.Group,reg:r['A/C Reg'],type:r['Aircraft Type']}; })); syncAllRowAircraftTypes(); applyChapterRows(workbookSheetObjects(workbook,'Chapters').map(function(r){ return {chapter:r.Chapter,description:r.Description}; })); rebuildSupervisorState(workbookSheetObjects(workbook,'Supervisors').map(function(r){ return {id:r.ID,name:r['Signatory Name'],stamp:r.Stamp,licence:r['License Number'],scope:r['Scope / Limitations'],date:r.Date}; })); var infoRows=workbookSheetObjects(workbook,'Info'); for(var k=0;k<infoRows.length;k++){ var key=normalizedText(infoRows[k].Key||infoRows[k].key),value=s(infoRows[k].Value||infoRows[k].value); if(key==='name') LOG_OWNER_INFO.name=value; if(key==='signature') LOG_OWNER_INFO.signature=value; if(key==='stamp') LOG_OWNER_INFO.stamp=value; } markSharedDatalistsDirty(); lastSavedLogbookText=fullLogbookText(); settingsDirty=false; }
       async function loadDefaultWorkbookData(){ var res=await fetch(DEFAULT_WORKBOOK_PATH,{cache:'no-store'}); if(!res.ok) throw new Error('Excel workbook returned '+res.status); loadWorkbookFromArrayBuffer(await res.arrayBuffer()); }
       function buildWorkbookFromState(){ syncAllRowAircraftTypes(); var wb=XLSX.utils.book_new(); var logRows=rows.map(function(row){ var out={}; for(var i=0;i<LOG_HEADERS.length;i++) out[LOG_HEADERS[i]]=s(LOG_HEADERS[i]==='Date'?workbookDateValue(row):row[LOG_HEADERS[i]]); return out; }); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(logRows,{header:LOG_HEADERS}),'Logbook'); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(aircraftWorkbookRows(),{header:['Group','A/C Reg','Aircraft Type']}),'Aircraft'); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(chapterWorkbookRows(),{header:['Chapter','Description']}),'Chapters'); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(supervisorWorkbookRows(),{header:['ID','Signatory Name','Stamp','License Number','Scope / Limitations','Date']}),'Supervisors'); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet([{Key:'Name',Value:s(LOG_OWNER_INFO.name)},{Key:'Signature',Value:s(LOG_OWNER_INFO.signature)},{Key:'Stamp',Value:s(LOG_OWNER_INFO.stamp)}],{header:['Key','Value']}),'Info'); return wb; }
-      async function getXlsxHandle(){ try { var stored=await loadStoredHandle(LINKED_FILE_KEY); if(stored&&handleIsWorkbook(stored)){ var perm=await stored.queryPermission({mode:'readwrite'}); if(perm==='granted') return stored; perm=await stored.requestPermission({mode:'readwrite'}); if(perm==='granted') return stored; } } catch(e){} return null; }
+      async function getXlsxHandle(){ try { var stored=await loadStoredHandle(LINKED_FILE_KEY); if(stored&&handleIsWorkbook(stored)){ setLinkedWorkbookName(stored); var perm=await stored.queryPermission({mode:'readwrite'}); if(perm==='granted') return stored; perm=await stored.requestPermission({mode:'readwrite'}); if(perm==='granted') return stored; } } catch(e){} return null; }
       function isStaleHandleError(e){ return !!(e && (e.name==='InvalidStateError' || (e.message&&e.message.indexOf('state cached')!==-1))); }
       async function writeWorkbookToHandle(handle){
         if(!handle) throw new Error('No Excel file linked. Click Save or Link and choose cap741-data.xlsx once to keep using it.');
@@ -614,7 +621,7 @@
         tabsHtml+='</div>';
         var panelHtml='';
         if(settingsActiveTab==='owner'){
-          panelHtml='<div class="settings-tab-panel"><p class="settings-panel-copy">Used on the CAP 741 page footer.</p><div class="settings-grid"><div class="settings-field"><label>Name</label><input class="settings-input" id="settingsOwnerName" type="text" value="'+esc(LOG_OWNER_INFO.name)+'"></div><div class="settings-field"><label>Stamp</label><input class="settings-input" id="settingsOwnerStamp" type="text" value="'+esc(LOG_OWNER_INFO.stamp)+'"></div></div></div>';
+          panelHtml='<div class="settings-tab-panel"><p class="settings-panel-copy">Used on the CAP 741 page footer.</p><div class="settings-grid"><div class="settings-field"><label>Name</label><input class="settings-input" id="settingsOwnerName" type="text" value="'+esc(LOG_OWNER_INFO.name)+'"></div><div class="settings-field"><label>Stamp</label><input class="settings-input" id="settingsOwnerStamp" type="text" value="'+esc(LOG_OWNER_INFO.stamp)+'"></div></div><div class="settings-linked-card"><div class="settings-linked-title">Linked Excel File</div><p class="settings-linked-copy" id="settingsLinkedWorkbookText">Checking remembered workbook...</p><p class="settings-linked-note">The Excel file can live in any folder. Once linked, the browser remembers it until you unlink it here.</p><div class="settings-linked-actions"><button class="settings-secondary-btn" id="unlinkWorkbookBtn" data-settings-unlink="1" type="button">Unlink workbook</button></div></div></div>';
         } else if(settingsActiveTab==='aircraft'){
           panelHtml='<div class="settings-tab-panel"><p class="settings-panel-copy">Manage aircraft registration, type, and group. Registration is used to auto-fill Aircraft Type when entering A/C Reg.</p><div class="settings-panel-toolbar"><button class="settings-add-row" type="button" data-settings-add="aircraft">+ Add aircraft</button></div><div class="settings-table-wrap"><table class="settings-table" data-settings-table="aircraft"><thead><tr><th>Group</th><th>A/C Reg</th><th>Aircraft Type</th><th></th></tr></thead><tbody>'+renderSettingsRows('aircraft')+'</tbody></table></div></div>';
         } else if(settingsActiveTab==='supervisors'){
@@ -626,6 +633,27 @@
         // Wire tab buttons
         var tabBtns=settingsBodyEl.querySelectorAll('.settings-tab-btn');
         for(var i=0;i<tabBtns.length;i++){ (function(btn){ btn.addEventListener('click',function(){ var nextTab=btn.getAttribute('data-settings-tab'); if(nextTab===settingsActiveTab) return; renderSettingsBody(nextTab); }); })(tabBtns[i]); }
+        if(settingsActiveTab==='owner') updateSettingsLinkedWorkbookUi();
+      }
+      async function updateSettingsLinkedWorkbookUi(){
+        if(!settingsBodyEl||settingsActiveTab!=='owner') return;
+        var textEl=settingsBodyEl.querySelector('#settingsLinkedWorkbookText');
+        var unlinkBtn=settingsBodyEl.querySelector('#unlinkWorkbookBtn');
+        if(!textEl||!unlinkBtn) return;
+        var handle=await loadStoredHandle(LINKED_FILE_KEY);
+        if(!settingsBodyEl.contains(textEl)) return;
+        var linked=!!(handle&&handleIsWorkbook(handle));
+        if(linked) setLinkedWorkbookName(handle);
+        else setLinkedWorkbookName(null);
+        textEl.textContent=linked?('Remembered workbook: '+(linkedWorkbookName||'cap741-data.xlsx')+'.'): 'No workbook is linked right now.';
+        unlinkBtn.disabled=!linked;
+      }
+      async function unlinkRememberedWorkbook(){
+        var removed=await removeStoredHandle(LINKED_FILE_KEY);
+        if(!removed) throw new Error('The remembered workbook could not be cleared.');
+        setLinkedWorkbookName(null);
+        syncLoadButtonAvailability(false);
+        await updateSettingsLinkedWorkbookUi();
       }
       function openSettingsModal(){ if(!settingsModal||!settingsBodyEl) return; renderSettingsBody(settingsActiveTab); settingsModal.className='modal-backdrop open'; }
       function closeSettingsModal(){ if(settingsModal) settingsModal.className='modal-backdrop'; }
@@ -753,6 +781,12 @@
       if(saveSettingsBtn) saveSettingsBtn.onclick=saveSettingsFromModal;
       if(settingsModal) settingsModal.onclick=function(ev){ if(ev.target===settingsModal) closeSettingsModal(); };
       if(settingsBodyEl) settingsBodyEl.addEventListener('click',function(ev){
+        var unlink=ev.target.closest&&ev.target.closest('[data-settings-unlink]');
+        if(unlink){
+          clearFail();
+          unlinkRememberedWorkbook().catch(function(e){ fail('Could not unlink Excel file: '+e.message); });
+          return;
+        }
         var add=ev.target.closest&&ev.target.closest('[data-settings-add]');
         if(add){ addSettingsRow(add.getAttribute('data-settings-add')); return; }
         var rem=ev.target.closest&&ev.target.closest('[data-settings-remove]');
@@ -844,39 +878,36 @@
         var loaded=false;
         var linked=false;
 
-        // 1. Try direct fetch (works when served via HTTP / local dev server)
+        // 1. Prefer the remembered linked workbook when one exists.
         try {
-          await loadDefaultWorkbookData();
-          loaded=true;
-        } catch(fetchErr){
-          // 2. Try stored file handle (user already picked file before)
+          var storedHandle=await loadStoredHandle(LINKED_FILE_KEY);
+          if(storedHandle&&handleIsWorkbook(storedHandle)&&await ensurePermission(storedHandle)){
+            setLinkedWorkbookName(storedHandle);
+            var file=await storedHandle.getFile();
+            loadWorkbookFromArrayBuffer(await file.arrayBuffer());
+            loaded=true;
+            linked=true;
+          }
+        } catch(handleErr){}
+
+        // 2. Fall back to the local default workbook when nothing is linked.
+        if(!loaded){
           try {
-            var storedHandle=await loadStoredHandle(LINKED_FILE_KEY);
-            if(storedHandle&&handleIsWorkbook(storedHandle)&&await ensurePermission(storedHandle)){
-              var file=await storedHandle.getFile();
-              loadWorkbookFromArrayBuffer(await file.arrayBuffer());
-              loaded=true;
-              linked=true;
-            }
-          } catch(handleErr){}
+            setLinkedWorkbookName(null);
+            await loadDefaultWorkbookData();
+            loaded=true;
+          } catch(fetchErr){}
         }
 
         if(!loaded){
           // Show load button for user to pick the xlsx file once
-          setLoadButtonMode('load');
+          syncLoadButtonAvailability(false);
           setLoadingState(false);
           renderAll();
           return;
         }
 
-        if(!linked){
-          try {
-            var rememberedHandle=await loadStoredHandle(LINKED_FILE_KEY);
-            linked=!!(rememberedHandle&&handleIsWorkbook(rememberedHandle));
-          } catch(linkStateErr){}
-        }
-        if(linked) setLoadButtonMode('hidden');
-        else if(filePickerSupported()) setLoadButtonMode('link');
+        syncLoadButtonAvailability(linked);
         renderAll();
         refreshUnsavedChangesState();
         setLoadingState(false);
