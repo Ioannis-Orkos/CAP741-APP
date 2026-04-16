@@ -40,6 +40,10 @@
       var LOG_HEADERS = ['Aircraft Type','A/C Reg','Chapter','Chapter Description','Date','Job No','FAULT','Task Detail','Rewriten for cap741','Approval Name','Approval stamp','Aprroval Licence No.'];
       var DATE_PLACEHOLDER = 'dd/MMM/yyyy';
       var FILTER_KEYS = ['aircraftType','aircraftReg','supervisor','chapter'];
+      var NEW_WORKBOOK_SUPERVISOR_NAME = 'Ioannis Orkos';
+      var NEW_WORKBOOK_SUPERVISOR_LICENCE = 'UK.XX.XXXXXXX';
+      var NEW_WORKBOOK_TASK_TEXT = 'Dummy data test one';
+      var NEW_WORKBOOK_OWNER_NAME = 'User User';
 
       // ---- DOM refs ----
       var errorBox = document.getElementById('errorBox');
@@ -50,6 +54,9 @@
       var searchInput = document.getElementById('searchInput');
       var clearSearchBtn = document.getElementById('clearSearchBtn');
       var loadBtn = document.getElementById('loadBtn');
+      var loadOptionsEl = document.getElementById('loadOptions');
+      var loadExistingBtn = document.getElementById('loadExistingBtn');
+      var createNewWorkbookBtn = document.getElementById('createNewWorkbookBtn');
       var filterBtn = document.getElementById('filterBtn');
       var filterCountEl = document.getElementById('filterCount');
       var filterStripEl = document.getElementById('filterStrip');
@@ -184,11 +191,14 @@
       function refreshUnsavedChangesState(){ hasUnsavedChanges=settingsDirty||fullLogbookText()!==(lastSavedLogbookText||''); syncSaveButtonState(false); }
       function syncSaveButtonState(isSaving){ if(!saveFileBtn) return; saveFileBtn.classList.toggle('open',!!hasUnsavedChanges||!!isSaving); saveFileBtn.classList.toggle('saving',!!isSaving); saveFileBtn.disabled=!!isSaving; saveFileBtn.setAttribute('aria-label',isSaving?'Saving changes to file':'Save changes to file'); saveFileBtn.title=isSaving?'Saving cap741-data.xlsx...':'Save changes to cap741-data.xlsx'; }
       function setPrintOptionsOpen(open){ if(!printOptionsEl||!printBtn) return; printOptionsEl.classList.toggle('open',!!open); printOptionsEl.setAttribute('aria-hidden',open?'false':'true'); printBtn.classList.toggle('active',!!open); }
+      function syncLoadOptionLabels(){ if(loadExistingBtn) loadExistingBtn.textContent=loadButtonMode==='link'?'Link Existing File':'Load Existing File'; }
+      function setLoadOptionsOpen(open){ if(!loadOptionsEl||!loadBtn) return; syncLoadOptionLabels(); loadOptionsEl.classList.toggle('open',!!open); loadOptionsEl.setAttribute('aria-hidden',open?'false':'true'); loadBtn.classList.toggle('active',!!open); }
       function fail(msg){ errorBox.style.display='block'; errorBox.textContent=msg; document.body.classList.add('has-top-error'); }
       function clearFail(){ errorBox.style.display='none'; errorBox.textContent=''; document.body.classList.remove('has-top-error'); }
       function saveFailureMessage(error){ var message='Could not save: '+(error&&error.message?error.message:'Unknown error.'); if(message.toLowerCase().indexOf('close it in excel')===-1&&message.toLowerCase().indexOf('open in excel')===-1) message+=' If cap741-data.xlsx is open in Excel, close it and try again.'; return message; }
       function filePickerSupported(){ return typeof window.showOpenFilePicker==='function'; }
-      function setLoadButtonMode(mode){ if(!loadBtn) return; loadButtonMode=mode||'load'; loadBtn.setAttribute('data-mode',loadButtonMode); if(loadButtonMode==='hidden'){ loadBtn.style.display='none'; return; } loadBtn.style.display='block'; loadBtn.textContent=loadButtonMode==='link'?'Link':'Load'; loadBtn.title=loadButtonMode==='link'?'Link Excel workbook for saving':'Load logbook'; loadBtn.setAttribute('aria-label',loadButtonMode==='link'?'Link Excel workbook for saving':'Load logbook'); }
+      function fileSavePickerSupported(){ return typeof window.showSaveFilePicker==='function'; }
+      function setLoadButtonMode(mode){ if(!loadBtn) return; loadButtonMode=mode||'load'; loadBtn.setAttribute('data-mode',loadButtonMode); if(loadButtonMode==='hidden'){ loadBtn.style.display='none'; setLoadOptionsOpen(false); return; } loadBtn.style.display='block'; loadBtn.textContent=loadButtonMode==='link'?'Link':'Load'; loadBtn.title=loadButtonMode==='link'?'Link Excel workbook for saving or create a new CAP741 file':'Load an existing logbook or create a new CAP741 file'; loadBtn.setAttribute('aria-label',loadButtonMode==='link'?'Link Excel workbook for saving or create a new CAP741 file':'Load an existing logbook or create a new CAP741 file'); syncLoadOptionLabels(); }
       function s(v){ return v==null?'':String(v).trim(); }
       function esc(v){ return s(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
@@ -200,6 +210,7 @@
       function isoFromDateParts(year, month, day){ var y=normalizeDateYear(year),m=padDatePart(month),d=padDatePart(day); return isValidIsoDateParts(y,m,d)?(y+'-'+m+'-'+d):''; }
       function excelSerialToIso(value){ var serial=Number(value); if(!isFinite(serial)||serial<=0) return ''; var whole=Math.floor(serial); var utc=(whole-25569)*86400000; var date=new Date(utc); if(!isFinite(date.getTime())) return ''; return isoFromDateParts(date.getUTCFullYear(),date.getUTCMonth()+1,date.getUTCDate()); }
       function parseDate(v){ var iso=toIsoInputDate(v); return iso?new Date(iso+'T00:00:00').getTime():8640000000000000; }
+      function todayIsoDate(){ var now=new Date(); return now.getFullYear()+'-'+padDatePart(now.getMonth()+1)+'-'+padDatePart(now.getDate()); }
       function toDisplayDate(v){ var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(s(v)); if(!m) return s(v); var months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return m[3]+'/'+months[(+m[2])-1]+'/'+m[1]; }
       function toIsoInputDate(v){ var src=s(v),m,iso=''; if(!src) return ''; if(/^(\d{4})-(\d{2})-(\d{2})$/.test(src)) return src; if(/^\d+(?:\.\d+)?$/.test(src)){ iso=excelSerialToIso(src); if(iso) return iso; } m=/^(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})$/.exec(src); if(m) return isoFromDateParts(m[1],m[2],m[3]); m=/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2}|\d{4})$/.exec(src); if(m){ var first=Number(m[1]),second=Number(m[2]),day=first,month=second; if(first<=12&&second>12){ day=second; month=first; } return isoFromDateParts(m[3],month,day); } m=/^(\d{1,2})[\s\/.-]+([A-Za-z]{3,9})[\s\/.-]+(\d{2}|\d{4})$/.exec(src); if(m){ var namedMonth=monthNumberFromName(m[2]); if(namedMonth) return isoFromDateParts(m[3],namedMonth,m[1]); } m=/^([A-Za-z]{3,9})[\s\/.-]+(\d{1,2})(?:,)?[\s\/.-]+(\d{2}|\d{4})$/.exec(src); if(m){ var leadingMonth=monthNumberFromName(m[1]); if(leadingMonth) return isoFromDateParts(m[3],leadingMonth,m[2]); } return ''; }
       function formatDateDisplay(v){ var iso=toIsoInputDate(v); return iso?toDisplayDate(iso):s(v); }
@@ -218,6 +229,17 @@
       function removeRowById(id){ var key=String(id); delete rowsById[key]; for(var i=rows.length-1;i>=0;i--){ if(String(rows[i].__rowId)===key){ rows.splice(i,1); break; } } }
       function rowsByGroupKey(key){ var out=[]; for(var i=0;i<rows.length;i++){ var row=rows[i]; if((aircraftLabel(row)+'||'+s(row['Chapter']))===key) out.push(row); } return out; }
       function fillAircraftTypeFromReg(row){ if(!row) return row; var reg=s(row['A/C Reg']).toUpperCase(); if(reg) row['A/C Reg']=reg; if(!s(row['Aircraft Type'])&&reg&&AIRCRAFT_MAP[reg]) row['Aircraft Type']=AIRCRAFT_MAP[reg]; return row; }
+      function randomBaAircraftRecord(){
+        var matches=[];
+        for(var i=0;i<(AIRCRAFT_GROUP_ROWS||[]).length;i++){
+          var item=AIRCRAFT_GROUP_ROWS[i]||{};
+          if(normalizedText(item.group)!=='ba') continue;
+          if(!s(item.reg)||!s(item.type)) continue;
+          matches.push({ group:s(item.group), reg:s(item.reg).toUpperCase(), type:s(item.type) });
+        }
+        if(!matches.length) return null;
+        return matches[Math.floor(Math.random()*matches.length)];
+      }
       function syncAllRowAircraftTypes(){ for(var i=0;i<rows.length;i++) fillAircraftTypeFromReg(rows[i]); }
       function tsvLineFromRow(row){ return LOG_HEADERS.map(function(key){ var value=key==='Date'?workbookDateValue(row):row[key]; return s(value).replace(/\r?\n/g,' ').replace(/\t/g,' '); }).join('\t'); }
       function fullLogbookText(){ var header=LOG_HEADERS.join('\t'),body=nonEmptyRows(rows).map(tsvLineFromRow).join('\r\n'); return header+'\r\n'+body+(body?'\r\n':''); }
@@ -441,7 +463,15 @@
         if(!handleIsWorkbook(handle)) throw new Error('Please choose a .xlsx Excel file.');
         if(!await ensurePermission(handle)) return null;
         await storeHandle(LINKED_FILE_KEY,handle);
-        setLoadButtonMode('hidden');
+        return handle;
+      }
+      async function pickNewWorkbookHandle(){
+        if(!fileSavePickerSupported()) throw new Error('Save file picker not supported. Use Chrome or Edge over a local web server to create a new Excel file.');
+        var handle=await window.showSaveFilePicker({suggestedName:'cap741-data.xlsx',types:[{description:'CAP741 Excel workbook',accept:{'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':['.xlsx']}}],excludeAcceptAllOption:true});
+        if(!handle) return null;
+        if(!handleIsWorkbook(handle)) throw new Error('Please save the new workbook as a .xlsx Excel file.');
+        if(!await ensurePermission(handle)) return null;
+        await storeHandle(LINKED_FILE_KEY,handle);
         return handle;
       }
 
@@ -464,19 +494,9 @@
       function buildWorkbookFromState(){ syncAllRowAircraftTypes(); var wb=XLSX.utils.book_new(); var logRows=rows.map(function(row){ var out={}; for(var i=0;i<LOG_HEADERS.length;i++) out[LOG_HEADERS[i]]=s(LOG_HEADERS[i]==='Date'?workbookDateValue(row):row[LOG_HEADERS[i]]); return out; }); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(logRows,{header:LOG_HEADERS}),'Logbook'); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(aircraftWorkbookRows(),{header:['Group','A/C Reg','Aircraft Type']}),'Aircraft'); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(chapterWorkbookRows(),{header:['Chapter','Description']}),'Chapters'); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(supervisorWorkbookRows(),{header:['ID','Signatory Name','Stamp','License Number','Scope / Limitations','Date']}),'Supervisors'); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet([{Key:'Name',Value:s(LOG_OWNER_INFO.name)},{Key:'Signature',Value:s(LOG_OWNER_INFO.signature)},{Key:'Stamp',Value:s(LOG_OWNER_INFO.stamp)}],{header:['Key','Value']}),'Info'); return wb; }
       async function getXlsxHandle(){ try { var stored=await loadStoredHandle(LINKED_FILE_KEY); if(stored&&handleIsWorkbook(stored)){ var perm=await stored.queryPermission({mode:'readwrite'}); if(perm==='granted') return stored; perm=await stored.requestPermission({mode:'readwrite'}); if(perm==='granted') return stored; } } catch(e){} return null; }
       function isStaleHandleError(e){ return !!(e && (e.name==='InvalidStateError' || (e.message&&e.message.indexOf('state cached')!==-1))); }
-      async function writeXlsx(allowPicker){
-        var handle=await getXlsxHandle();
-        if(!handle&&allowPicker){
-          setLoadingState(true,'Linking file','Choose the Excel workbook to save to...');
-          handle=await pickWorkbookHandle();
-          if(handle) setLoadingState(true,'Saving','Writing changes to cap741-data.xlsx...');
-        }
+      async function writeWorkbookToHandle(handle){
         if(!handle) throw new Error('No Excel file linked. Click Save or Link and choose cap741-data.xlsx once to keep using it.');
-        // Build the workbook first so serialization errors happen before we touch disk.
         var data=XLSX.write(buildWorkbookFromState(),{bookType:'xlsx',type:'array'});
-        // createWritable() fails with InvalidStateError when another program (e.g. Excel)
-        // has modified the file since the handle was issued. Re-request permission to
-        // refresh the handle's internal state, then retry once.
         var writable=null;
         for(var attempt=0;attempt<2;attempt++){
           try {
@@ -484,7 +504,6 @@
             break;
           } catch(e){
             if(attempt===0 && isStaleHandleError(e)){
-              // Refresh the handle by re-requesting permission, then retry
               try { await handle.requestPermission({mode:'readwrite'}); } catch(permErr){}
               continue;
             }
@@ -504,6 +523,54 @@
         }
         lastSavedLogbookText=fullLogbookText();
         settingsDirty=false;
+      }
+      function initializeNewWorkbookState(){
+        var starterAircraft=randomBaAircraftRecord();
+        var starterRow=normalizeLoadedRow({
+          'Aircraft Type':starterAircraft?starterAircraft.type:'',
+          'A/C Reg':starterAircraft?starterAircraft.reg:'',
+          'Chapter':'',
+          'Chapter Description':'',
+          'Date':todayIsoDate(),
+          'Job No':'TEST-001',
+          'FAULT':'',
+          'Task Detail':NEW_WORKBOOK_TASK_TEXT,
+          'Rewriten for cap741':NEW_WORKBOOK_TASK_TEXT,
+          'Approval Name':NEW_WORKBOOK_SUPERVISOR_NAME,
+          'Approval stamp':NEW_WORKBOOK_SUPERVISOR_NAME,
+          'Aprroval Licence No.':NEW_WORKBOOK_SUPERVISOR_LICENCE
+        });
+        rows=normalizeRows([starterRow]);
+        AIRCRAFT_GROUP_ROWS=starterAircraft?[starterAircraft]:[];
+        AIRCRAFT_MAP=starterAircraft?(function(){ var map=Object.create(null); map[starterAircraft.reg]=starterAircraft.type; return map; })():Object.create(null);
+        CHAPTER_OPTIONS=[];
+        LOG_OWNER_INFO={ name:NEW_WORKBOOK_OWNER_NAME, signature:NEW_WORKBOOK_OWNER_NAME, stamp:NEW_WORKBOOK_OWNER_NAME };
+        activeFilters=emptyFilterState();
+        draftFilters=emptyFilterState();
+        searchQuery='';
+        rebuildSupervisorState([{ id:'1', name:NEW_WORKBOOK_SUPERVISOR_NAME, stamp:NEW_WORKBOOK_SUPERVISOR_NAME, licence:NEW_WORKBOOK_SUPERVISOR_LICENCE, scope:'', date:todaySupervisorDate() }]);
+        markSharedDatalistsDirty();
+        settingsDirty=false;
+        lastSavedLogbookText='';
+      }
+      async function writeXlsx(allowPicker){
+        var handle=await getXlsxHandle();
+        if(!handle&&allowPicker){
+          setLoadingState(true,'Linking file','Choose the Excel workbook to save to...');
+          handle=await pickWorkbookHandle();
+          if(handle) setLoadingState(true,'Saving','Writing changes to cap741-data.xlsx...');
+        }
+        await writeWorkbookToHandle(handle);
+      }
+      async function createNewWorkbookFile(){
+        var handle=await pickNewWorkbookHandle();
+        if(!handle) return false;
+        initializeNewWorkbookState();
+        await writeWorkbookToHandle(handle);
+        setLoadButtonMode('hidden');
+        await renderAllWithLoading('Creating logbook','Rendering starter CAP741 pages...');
+        refreshUnsavedChangesState();
+        return true;
       }
 
       // ---- Auto-save after chapter/data changes ----
@@ -622,18 +689,30 @@
       closeInfoModalBtn.onclick=function(){ closeInfoModal(); };
       infoModal.onclick=function(ev){ if(ev.target===infoModal) closeInfoModal(); };
 
-      printBtn.onclick=function(ev){ if(ev) ev.stopPropagation(); setPrintOptionsOpen(!(printOptionsEl&&printOptionsEl.classList.contains('open'))); };
+      printBtn.onclick=function(ev){ if(ev) ev.stopPropagation(); setLoadOptionsOpen(false); setPrintOptionsOpen(!(printOptionsEl&&printOptionsEl.classList.contains('open'))); };
       printCurrentBtn.onclick=function(){ setPrintOptionsOpen(false); printCurrentPage(); };
       printAllBtn.onclick=function(){ setPrintOptionsOpen(false); printAllPages(); };
-      document.addEventListener('click',function(ev){ if(!printOptionsEl||!printBtn) return; if(ev.target.closest&&(ev.target.closest('#printBtn')||ev.target.closest('#printOptions'))) return; setPrintOptionsOpen(false); });
+      document.addEventListener('click',function(ev){
+        var insidePrint=!!(ev.target.closest&&(ev.target.closest('#printBtn')||ev.target.closest('#printOptions')));
+        var insideLoad=!!(ev.target.closest&&(ev.target.closest('#loadBtn')||ev.target.closest('#loadOptions')));
+        if(!insidePrint) setPrintOptionsOpen(false);
+        if(!insideLoad) setLoadOptionsOpen(false);
+      });
 
       // Save button - write xlsx
       saveFileBtn.onclick=async function(){ captureActiveEditorState(); setLoadingState(true,'Saving','Writing changes to cap741-data.xlsx...'); try { await flushLinkedRewrite(true); } finally { setLoadingState(false); } };
 
-      // Load button - xlsx only, prompt once
-      loadBtn.onclick=async function(){
+      // Load/Link button menu
+      loadBtn.onclick=function(ev){
+        if(ev) ev.stopPropagation();
+        setPrintOptionsOpen(false);
+        setLoadOptionsOpen(!(loadOptionsEl&&loadOptionsEl.classList.contains('open')));
+      };
+      if(loadExistingBtn) loadExistingBtn.onclick=async function(ev){
+        if(ev) ev.stopPropagation();
         if(!filePickerSupported()){ fail('File picker not supported. Open this page via a local web server (e.g. VS Code Live Server) and use Chrome or Edge.'); return; }
         try {
+          setLoadOptionsOpen(false);
           clearFail();
           setLoadingState(true,loadButtonMode==='link'?'Linking file':'Loading','Waiting for Excel file selection...');
           var handle=await pickWorkbookHandle();
@@ -642,16 +721,27 @@
             setLoadButtonMode('hidden');
             return;
           }
-          if(handle){
-            setLoadingState(true,'Loading','Reading workbook...');
-            var file=await handle.getFile();
-            loadWorkbookFromArrayBuffer(await file.arrayBuffer());
-            setLoadButtonMode('hidden');
-            await renderAllWithLoading('Loading logbook','Rendering pages...');
-            refreshUnsavedChangesState();
-          }
+          setLoadingState(true,'Loading','Reading workbook...');
+          var file=await handle.getFile();
+          loadWorkbookFromArrayBuffer(await file.arrayBuffer());
+          setLoadButtonMode('hidden');
+          await renderAllWithLoading('Loading logbook','Rendering pages...');
+          refreshUnsavedChangesState();
         } catch(e){
           if(e.name!=='AbortError') fail('Could not open Excel file: '+e.message);
+        } finally {
+          setLoadingState(false);
+        }
+      };
+      if(createNewWorkbookBtn) createNewWorkbookBtn.onclick=async function(ev){
+        if(ev) ev.stopPropagation();
+        try {
+          setLoadOptionsOpen(false);
+          clearFail();
+          setLoadingState(true,'Creating logbook','Choose where to save the new cap741-data.xlsx file...');
+          await createNewWorkbookFile();
+        } catch(e){
+          if(e.name!=='AbortError') fail('Could not create Excel file: '+e.message);
         } finally {
           setLoadingState(false);
         }
