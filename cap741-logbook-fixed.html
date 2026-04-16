@@ -17,6 +17,17 @@
       <div class="loading-text" id="loadingText">Preparing pages...</div>
     </div>
   </div>
+  <div class="search-shell">
+    <div class="search-box">
+      <span class="search-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" focusable="false">
+          <path fill="currentColor" d="M10.5 4a6.5 6.5 0 1 0 4.03 11.6l4.44 4.44 1.41-1.41-4.44-4.44A6.5 6.5 0 0 0 10.5 4zm0 2a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9z"/>
+        </svg>
+      </span>
+      <input class="search-input" id="searchInput" type="text" autocomplete="off" placeholder="Search Job No or Task Detail" aria-label="Search Job No or Task Detail">
+      <button class="search-clear" id="clearSearchBtn" type="button" aria-label="Clear search" hidden>X</button>
+    </div>
+  </div>
   <button class="load-fab" id="loadBtn" aria-label="Load logbook">Load</button>
   <button class="filter-fab" id="filterBtn" aria-label="Open filters">
     <span class="filter-count" id="filterCount" hidden>0</span>

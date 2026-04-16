@@ -3,6 +3,15 @@
     html, body { margin:0; padding:0; background:var(--bg); color:var(--ink); font-family:Arial, Helvetica, sans-serif; }
     body.busy { cursor:progress; }
     .error { display:none; width:var(--page-w); margin:16px auto 0; background:#fff0f0; color:#8a0000; border:1px solid #b30000; padding:12px 14px; font-size:14px; }
+    .search-shell { position:fixed; top:12px; left:50%; transform:translateX(-50%); width:min(320px, calc(100vw - 136px)); z-index:24; pointer-events:none; }
+    .search-box { display:flex; align-items:center; gap:7px; min-height:38px; padding:3px 5px 3px 10px; background:linear-gradient(180deg, rgba(255,255,255,.72) 0%, rgba(248,251,253,.68) 100%); border:1px solid rgba(201,212,221,.78); border-radius:999px; box-shadow:0 14px 28px rgba(23,55,74,.12), inset 0 1px 0 rgba(255,255,255,.45); backdrop-filter:blur(10px); pointer-events:auto; transition:border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
+    .search-box:focus-within { border-color:#9fb5c5; box-shadow:0 16px 32px rgba(23,55,74,.18), 0 0 0 4px rgba(63,109,141,.10), inset 0 1px 0 rgba(255,255,255,.82); }
+    .search-icon { flex:0 0 auto; width:16px; height:16px; color:#5d7384; display:flex; align-items:center; justify-content:center; }
+    .search-icon svg { width:16px; height:16px; display:block; }
+    .search-input { flex:1 1 auto; width:100%; min-width:0; border:0; background:transparent; color:#102836; font:600 12px/1.2 Arial, Helvetica, sans-serif; outline:none; letter-spacing:.01em; }
+    .search-input::placeholder { color:#6a7f8d; opacity:1; }
+    .search-clear { flex:0 0 auto; width:26px; height:26px; border:1px solid #d6dee4; border-radius:999px; background:linear-gradient(180deg, #ffffff 0%, #f2f5f7 100%); color:#365466; font:700 10px/1 Arial, Helvetica, sans-serif; cursor:pointer; box-shadow:inset 0 1px 0 rgba(255,255,255,.7); }
+    .search-clear:hover { background:linear-gradient(180deg, #ffffff 0%, #eaf0f4 100%); border-color:#c2ced7; }
     .add-fab, .print-fab, .load-fab, .filter-fab, .save-fab, .settings-fab, .info-fab { position:fixed; width:50px; height:50px; border:0; border-radius:50%; background:#111; color:#fff; cursor:pointer; box-shadow:0 10px 24px rgba(0,0,0,.24); z-index:20; }
     .load-fab { right:18px; top:138px; font-size:12px; font-weight:700; display:none; }
     .filter-fab { right:18px; top:calc(50vh - 25px); display:flex; align-items:center; justify-content:center; transition:transform .18s ease, box-shadow .18s ease, background .18s ease; }
@@ -33,7 +42,7 @@
     .loading-title { font-size:18px; font-weight:700; line-height:1.2; }
     .loading-text { margin-top:6px; font-size:13px; color:#4a5560; }
     @keyframes spin { to { transform:rotate(360deg); } }
-    .pages { padding:12px 0 28px; }
+    .pages { padding:58px 0 28px; }
     .filter-strip { width:min(var(--page-w), calc(100vw - 24px)); margin:14px auto 0; display:none; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; background:#fff; border:1px solid #e1e7ec; box-shadow:0 8px 18px rgba(32,56,79,.05); }
     .filter-strip.open { display:flex; }
     .filter-strip-text { font-size:12px; color:#244055; display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
@@ -160,6 +169,11 @@
     .info-copy strong { color:#111; }
     .info-copy a { color:#17374a; text-decoration:none; }
     .info-copy a:hover { text-decoration:underline; }
+    @media (max-width: 720px) {
+      .search-shell { top:10px; width:min(290px, calc(100vw - 120px)); }
+      .search-box { min-height:36px; padding-left:10px; }
+      .pages { padding-top:52px; }
+    }
     @media (min-width: 720px) {
       .filter-form { grid-template-columns:1fr 1fr; column-gap:12px; row-gap:10px; }
       .filter-actions { grid-column:1 / -1; }
@@ -201,7 +215,7 @@
     @media print {
       @page { size:A5 landscape; margin:0; }
       html, body { width:var(--page-w); height:var(--page-h); background:#fff; }
-      .error, .print-fab, .add-fab, .load-fab, .filter-fab, .save-fab, .settings-fab, .info-fab, .print-options, .filter-strip, .modal-backdrop, .loading-overlay, .task-expand, .sup-clear { display:none !important; }
+      .error, .search-shell, .print-fab, .add-fab, .load-fab, .filter-fab, .save-fab, .settings-fab, .info-fab, .print-options, .filter-strip, .modal-backdrop, .loading-overlay, .task-expand, .sup-clear { display:none !important; }
       body.print-current .page.print-exclude { display:none !important; }
       .pages { padding:0; }
       .page {
