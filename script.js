@@ -38,6 +38,7 @@
       var AUTO_LOAD_DEFAULT_KEY = 'cap741-auto-load-default';
       var STORAGE_SOURCE_KEY = 'cap741-storage-source';
       var GOOGLE_CLIENT_ID_KEY = 'cap741-google-client-id';
+      var GOOGLE_CLIENT_ID = '647645362385-rj453g1g2g79hh9vorp1guvp7e9c8b9b.apps.googleusercontent.com';
       var DEFAULT_WORKBOOK_PATH = './cap741-data.xlsx';
       var BLANK_CHAPTER_FILTER = 'No Chapter';
       var LOG_HEADERS = ['Aircraft Type','A/C Reg','Chapter','Chapter Description','Date','Job No','FAULT','Task Detail','Rewriten for cap741','Approval Name','Approval stamp','Aprroval Licence No.'];
@@ -215,13 +216,46 @@
       function sourceType(source){ return source&&source.type ? source.type : STORAGE_SOURCE_NONE; }
       function setActiveStorageSource(source, persist){ activeStorageSource=source||{ type: STORAGE_SOURCE_NONE }; if(persist!==false){ if(sourceType(activeStorageSource)===STORAGE_SOURCE_NONE) writeStoredJson(STORAGE_SOURCE_KEY,null); else writeStoredJson(STORAGE_SOURCE_KEY,activeStorageSource); } }
       function loadStoredSource(){ var stored=readStoredJson(STORAGE_SOURCE_KEY); return stored&&stored.type ? stored : { type: STORAGE_SOURCE_NONE }; }
-      function googleClientId(){ try { return s((window.CAP741_GOOGLE_CONFIG&&window.CAP741_GOOGLE_CONFIG.clientId)||window.CAP741_GOOGLE_CLIENT_ID||window.localStorage&&window.localStorage.getItem(GOOGLE_CLIENT_ID_KEY)||''); } catch(e){ return ''; } }
+      function googleSheetUrl(source){ var spreadsheetId=s(source&&source.spreadsheetId); return spreadsheetId?('https://docs.google.com/spreadsheets/d/'+encodeURIComponent(spreadsheetId)+'/edit') : ''; }
+      function googleClientId(){ try { return s(GOOGLE_CLIENT_ID||(window.CAP741_GOOGLE_CONFIG&&window.CAP741_GOOGLE_CONFIG.clientId)||window.CAP741_GOOGLE_CLIENT_ID||window.localStorage&&window.localStorage.getItem(GOOGLE_CLIENT_ID_KEY)||''); } catch(e){ return ''; } }
       function ensureGoogleClientId(interactive){ var clientId=googleClientId(); if(clientId) return clientId; if(!interactive) return ''; clientId=s(window.prompt('Enter your Google OAuth Client ID for Google Sheets access.',clientId||'')); if(clientId&&window.localStorage) window.localStorage.setItem(GOOGLE_CLIENT_ID_KEY,clientId); return clientId; }
       function shouldAutoLoadDefaultWorkbook(){ try { return window.localStorage ? window.localStorage.getItem(AUTO_LOAD_DEFAULT_KEY)!=='0' : true; } catch(e){ return true; } }
       function setAutoLoadDefaultWorkbook(enabled){ try { if(window.localStorage) window.localStorage.setItem(AUTO_LOAD_DEFAULT_KEY,enabled?'1':'0'); } catch(e){} }
       function fail(msg){ errorBox.style.display='block'; errorBox.textContent=msg; document.body.classList.add('has-top-error'); }
       function clearFail(){ errorBox.style.display='none'; errorBox.textContent=''; document.body.classList.remove('has-top-error'); }
       function saveFailureMessage(error){ var message='Could not save: '+(error&&error.message?error.message:'Unknown error.'); if(sourceType(activeStorageSource)===STORAGE_SOURCE_GOOGLE) return message; if(message.toLowerCase().indexOf('close it in excel')===-1&&message.toLowerCase().indexOf('open in excel')===-1) message+=' If cap741-data.xlsx is open in Excel, close it and try again.'; return message; }
+      async function copyTextToClipboard(text){
+        if(!s(text)) return false;
+        if(navigator.clipboard&&typeof navigator.clipboard.writeText==='function'){
+          await navigator.clipboard.writeText(text);
+          return true;
+        }
+        var input=document.createElement('textarea');
+        input.value=text;
+        input.setAttribute('readonly','readonly');
+        input.style.position='fixed';
+        input.style.left='-9999px';
+        document.body.appendChild(input);
+        input.select();
+        try {
+          return !!document.execCommand('copy');
+        } finally {
+          document.body.removeChild(input);
+        }
+      }
+      function flashStorageCopyButton(btn){
+        if(!btn) return;
+        var originalLabel=btn.getAttribute('aria-label')||'Copy link';
+        btn.classList.add('copied');
+        btn.title='Copied';
+        btn.setAttribute('aria-label','Link copied');
+        clearTimeout(btn.__copiedTimer);
+        btn.__copiedTimer=setTimeout(function(){
+          btn.classList.remove('copied');
+          btn.title='Copy link';
+          btn.setAttribute('aria-label',originalLabel);
+        },1200);
+      }
       function filePickerSupported(){ return typeof window.showOpenFilePicker==='function'; }
       function fileSavePickerSupported(){ return typeof window.showSaveFilePicker==='function'; }
       function syncLoadButtonAvailability(isLinked){ if(isLinked){ setLoadButtonMode('hidden'); return; } setLoadButtonMode(hasWorkbookDataLoaded()?'link':'load'); }
@@ -501,6 +535,12 @@
         if(!handle) return null;
         if(!handleIsWorkbook(handle)) throw new Error('Please save the new workbook as a .xlsx Excel file.');
         if(!await ensurePermission(handle)) return null;
+        try {
+          var existingFile=await handle.getFile();
+          if(existingFile&&existingFile.size>0) throw new Error('That Excel file already exists. Choose a new filename so the app does not overwrite it.');
+        } catch(e){
+          if(e&&e.name&&e.name!=='NotFoundError') throw e;
+        }
         await storeHandle(LINKED_FILE_KEY,handle);
         setLinkedWorkbookName(handle);
         return handle;
@@ -624,6 +664,30 @@
         await renderAllWithLoading('Loading Google Sheet','Rendering pages from Google Sheets...');
         refreshUnsavedChangesState();
         return true;
+      }
+      async function confirmReplaceStorageLoad(label){
+        if(!hasWorkbookDataLoaded()) return true;
+        return await showConfirmDialog('Load Storage Source','Loading '+label+' will replace the current CAP741 data in the app. Use Migrate if you want to copy the current data first.','Load source');
+      }
+      async function loadExistingExcelSourceFromSettings(){
+        if(!filePickerSupported()) throw new Error('File picker not supported. Open this page via a local web server (e.g. VS Code Live Server) and use Chrome or Edge.');
+        if(!await confirmReplaceStorageLoad('an Excel file')) return false;
+        setLoadingState(true,'Loading','Waiting for Excel file selection...');
+        var handle=await pickWorkbookHandle();
+        if(!handle) return false;
+        setAutoLoadDefaultWorkbook(false);
+        setActiveStorageSource({type:STORAGE_SOURCE_EXCEL,name:s(handle.name)},true);
+        setLoadingState(true,'Loading','Reading workbook...');
+        var file=await handle.getFile();
+        loadWorkbookFromArrayBuffer(await file.arrayBuffer());
+        setLoadButtonMode('hidden');
+        await renderAllWithLoading('Loading logbook','Rendering pages...');
+        refreshUnsavedChangesState();
+        return true;
+      }
+      async function loadExistingGoogleSheetSourceFromSettings(){
+        if(!await confirmReplaceStorageLoad('a Google Sheet')) return false;
+        return await connectExistingGoogleSheet();
       }
       async function createNewGoogleSheet(){
         if(!hasWorkbookDataLoaded()) initializeNewWorkbookState();
@@ -800,6 +864,27 @@
         refreshUnsavedChangesState();
         return true;
       }
+      async function migrateCurrentDataToExcel(){
+        if(!hasWorkbookDataLoaded()) throw new Error('Load a CAP741 source first before migrating data.');
+        var handle=await pickNewWorkbookHandle();
+        if(!handle) return false;
+        setLoadingState(true,'Migrating storage','Copying the current data into the new Excel file...');
+        setAutoLoadDefaultWorkbook(false);
+        setActiveStorageSource({type:STORAGE_SOURCE_EXCEL,name:s(handle.name)},true);
+        await writeWorkbookToHandle(handle);
+        setLoadButtonMode('hidden');
+        refreshUnsavedChangesState();
+        return true;
+      }
+      async function migrateCurrentDataToGoogleSheet(){
+        if(!hasWorkbookDataLoaded()) throw new Error('Load a CAP741 source first before migrating data.');
+        var source=await createNewGoogleSheet();
+        if(!source) return false;
+        await removeStoredHandle(LINKED_FILE_KEY);
+        setLinkedWorkbookName(null);
+        refreshUnsavedChangesState();
+        return true;
+      }
       async function saveActiveStorage(allowPicker){
         if(sourceType(activeStorageSource)===STORAGE_SOURCE_GOOGLE){
           await saveGoogleSheetState(activeStorageSource,!!allowPicker);
@@ -843,13 +928,15 @@
       }
       function renderSettingsBody(tab){
         settingsActiveTab=tab||'owner';
-        var TABS=[{id:'owner',label:'Owner'},{id:'aircraft',label:'Aircraft'},{id:'supervisors',label:'Supervisors'},{id:'chapters',label:'Chapters'}];
+        var TABS=[{id:'owner',label:'Owner'},{id:'storage',label:'Storage'},{id:'aircraft',label:'Aircraft'},{id:'supervisors',label:'Supervisors'},{id:'chapters',label:'Chapters'}];
         var tabsHtml='<div class="settings-tabs-nav">';
         for(var t=0;t<TABS.length;t++) tabsHtml+='<button type="button" class="settings-tab-btn'+(TABS[t].id===settingsActiveTab?' active':'')+'" data-settings-tab="'+TABS[t].id+'">'+TABS[t].label+'</button>';
         tabsHtml+='</div>';
         var panelHtml='';
         if(settingsActiveTab==='owner'){
-          panelHtml='<div class="settings-tab-panel"><p class="settings-panel-copy">Used on the CAP 741 page footer.</p><div class="settings-grid"><div class="settings-field"><label>Name</label><input class="settings-input" id="settingsOwnerName" type="text" value="'+esc(LOG_OWNER_INFO.name)+'"></div><div class="settings-field"><label>Stamp</label><input class="settings-input" id="settingsOwnerStamp" type="text" value="'+esc(LOG_OWNER_INFO.stamp)+'"></div></div><div class="settings-linked-card"><div class="settings-linked-title">Connected Storage</div><p class="settings-linked-copy" id="settingsLinkedWorkbookText">Checking remembered storage...</p><p class="settings-linked-note">You can work with either an Excel file or a Google Sheet. The app remembers the last linked source until you unlink it here.</p><div class="settings-linked-actions"><button class="settings-secondary-btn" id="unlinkWorkbookBtn" data-settings-unlink="1" type="button">Unlink source</button></div></div></div>';
+          panelHtml='<div class="settings-tab-panel"><p class="settings-panel-copy">Used on the CAP 741 page footer.</p><div class="settings-grid"><div class="settings-field"><label>Name</label><input class="settings-input" id="settingsOwnerName" type="text" value="'+esc(LOG_OWNER_INFO.name)+'"></div><div class="settings-field"><label>Stamp</label><input class="settings-input" id="settingsOwnerStamp" type="text" value="'+esc(LOG_OWNER_INFO.stamp)+'"></div></div></div>';
+        } else if(settingsActiveTab==='storage'){
+          panelHtml='<div class="settings-tab-panel"><p class="settings-panel-copy">See which storage source is connected, switch to another one, or migrate the current data between local Excel and Google Sheets.</p><div class="settings-linked-card"><div class="settings-linked-title">Current Linked Storage</div><p class="settings-linked-copy" id="settingsStorageSummary">Checking remembered storage...</p><div class="settings-storage-link" id="settingsStorageLinkRow" hidden><a class="settings-storage-anchor" id="settingsStorageLink" href="#" target="_blank" rel="noreferrer noopener"></a><button class="settings-copy-btn" id="settingsCopyStorageLinkBtn" data-settings-copy-link="1" type="button" aria-label="Copy link" title="Copy link"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 9h9v11H9z"></path><path d="M6 4h9v3H8v9H6z"></path></svg></button></div><div class="settings-linked-note" id="settingsStorageNote">Migration copies the current in-browser data to a new source and then switches the app to that source.</div><div class="settings-storage-section"><div class="settings-linked-title">Load Existing Source</div><div class="settings-storage-actions"><button class="settings-secondary-btn" id="loadStorageExcelBtn" data-settings-storage-action="load-excel" type="button">Load Excel File</button><button class="settings-secondary-btn" id="loadStorageGoogleBtn" data-settings-storage-action="load-google" type="button">Load Google Sheet</button></div></div><div class="settings-storage-section"><div class="settings-linked-title">Migrate Current Data</div><div class="settings-storage-actions"><button class="settings-secondary-btn" id="migrateToExcelBtn" data-settings-storage-action="migrate-excel" type="button">Migrate To Excel</button><button class="settings-secondary-btn" id="migrateToGoogleBtn" data-settings-storage-action="migrate-google" type="button">Migrate To Google Sheet</button><button class="settings-secondary-btn" id="unlinkWorkbookBtn" data-settings-unlink="1" type="button">Unlink Source</button></div></div></div></div>';
         } else if(settingsActiveTab==='aircraft'){
           panelHtml='<div class="settings-tab-panel"><p class="settings-panel-copy">Manage aircraft registration, type, and group. Registration is used to auto-fill Aircraft Type when entering A/C Reg.</p><div class="settings-panel-toolbar"><button class="settings-add-row" type="button" data-settings-add="aircraft">+ Add aircraft</button></div><div class="settings-table-wrap"><table class="settings-table" data-settings-table="aircraft"><thead><tr><th>Group</th><th>A/C Reg</th><th>Aircraft Type</th><th></th></tr></thead><tbody>'+renderSettingsRows('aircraft')+'</tbody></table></div></div>';
         } else if(settingsActiveTab==='supervisors'){
@@ -861,25 +948,56 @@
         // Wire tab buttons
         var tabBtns=settingsBodyEl.querySelectorAll('.settings-tab-btn');
         for(var i=0;i<tabBtns.length;i++){ (function(btn){ btn.addEventListener('click',function(){ var nextTab=btn.getAttribute('data-settings-tab'); if(nextTab===settingsActiveTab) return; renderSettingsBody(nextTab); }); })(tabBtns[i]); }
-        if(settingsActiveTab==='owner') updateSettingsLinkedWorkbookUi();
+        if(settingsActiveTab==='storage') updateSettingsStorageUi();
       }
-      async function updateSettingsLinkedWorkbookUi(){
-        if(!settingsBodyEl||settingsActiveTab!=='owner') return;
-        var textEl=settingsBodyEl.querySelector('#settingsLinkedWorkbookText');
+      async function updateSettingsStorageUi(){
+        if(!settingsBodyEl||settingsActiveTab!=='storage') return;
+        var textEl=settingsBodyEl.querySelector('#settingsStorageSummary');
+        var noteEl=settingsBodyEl.querySelector('#settingsStorageNote');
+        var linkRowEl=settingsBodyEl.querySelector('#settingsStorageLinkRow');
+        var linkEl=settingsBodyEl.querySelector('#settingsStorageLink');
+        var copyBtn=settingsBodyEl.querySelector('#settingsCopyStorageLinkBtn');
         var unlinkBtn=settingsBodyEl.querySelector('#unlinkWorkbookBtn');
-        if(!textEl||!unlinkBtn) return;
+        var loadExcelBtn=settingsBodyEl.querySelector('#loadStorageExcelBtn');
+        var loadGoogleBtn=settingsBodyEl.querySelector('#loadStorageGoogleBtn');
+        var migrateExcelBtn=settingsBodyEl.querySelector('#migrateToExcelBtn');
+        var migrateGoogleBtn=settingsBodyEl.querySelector('#migrateToGoogleBtn');
+        if(!textEl||!unlinkBtn||!loadExcelBtn||!loadGoogleBtn||!migrateExcelBtn||!migrateGoogleBtn) return;
         var source=loadStoredSource(),handle=await loadStoredHandle(LINKED_FILE_KEY);
         if(!settingsBodyEl.contains(textEl)) return;
         var linked=sourceType(source)===STORAGE_SOURCE_GOOGLE?!!s(source.spreadsheetId):!!(handle&&handleIsWorkbook(handle));
         if(sourceType(source)===STORAGE_SOURCE_GOOGLE){
           setLinkedWorkbookName(null);
-          textEl.textContent=linked?('Remembered Google Sheet: '+(s(source.title)||s(source.spreadsheetId))+'.'):'No storage source is linked right now.';
+          textEl.textContent=linked?('Google Sheet: '+(s(source.title)||s(source.spreadsheetId))+'.'):'No storage source is linked right now.';
+          var url=googleSheetUrl(source);
+          if(linkRowEl) linkRowEl.hidden=!url;
+          if(linkEl){
+            linkEl.href=url||'#';
+            linkEl.textContent=url;
+          }
+          if(copyBtn) copyBtn.disabled=!url;
         } else {
           if(linked) setLinkedWorkbookName(handle);
           else setLinkedWorkbookName(null);
-          textEl.textContent=linked?('Remembered Excel file: '+(linkedWorkbookName||'cap741-data.xlsx')+'.'):'No storage source is linked right now.';
+          textEl.textContent=linked?('Excel file: '+(linkedWorkbookName||'cap741-data.xlsx')+'.'):'No storage source is linked right now.';
+          if(linkRowEl) linkRowEl.hidden=true;
+          if(linkEl){
+            linkEl.removeAttribute('href');
+            linkEl.textContent='';
+          }
+          if(copyBtn) copyBtn.disabled=true;
         }
         unlinkBtn.disabled=!linked;
+        loadExcelBtn.disabled=false;
+        loadGoogleBtn.disabled=false;
+        migrateExcelBtn.disabled=!hasWorkbookDataLoaded()||sourceType(activeStorageSource)===STORAGE_SOURCE_EXCEL;
+        migrateGoogleBtn.disabled=!hasWorkbookDataLoaded()||sourceType(activeStorageSource)===STORAGE_SOURCE_GOOGLE;
+        if(noteEl){
+          if(!hasWorkbookDataLoaded()) noteEl.textContent='Use "Load Excel File" or "Load Google Sheet" to open a source. Migration becomes available after CAP741 data is loaded.';
+          else if(sourceType(activeStorageSource)===STORAGE_SOURCE_GOOGLE) noteEl.textContent='Load switches the app to another source. Use "Migrate To Excel" to copy the current Google Sheet data into a new Excel file and switch the app to that file.';
+          else if(sourceType(activeStorageSource)===STORAGE_SOURCE_EXCEL||sourceType(activeStorageSource)===STORAGE_SOURCE_DEFAULT) noteEl.textContent='Load switches the app to another source. Use "Migrate To Google Sheet" to copy the current Excel data into a new Google Sheet and switch the app to that sheet.';
+          else noteEl.textContent='Load switches the app to another source. Migration copies the current in-browser data to a new source and then switches the app to that source.';
+        }
       }
       async function unlinkRememberedWorkbook(){
         var removed=await removeStoredHandle(LINKED_FILE_KEY);
@@ -1052,7 +1170,48 @@
         var unlink=ev.target.closest&&ev.target.closest('[data-settings-unlink]');
         if(unlink){
           clearFail();
-          unlinkRememberedWorkbook().catch(function(e){ fail('Could not unlink Excel file: '+e.message); });
+          unlinkRememberedWorkbook().catch(function(e){ fail('Could not unlink storage source: '+e.message); });
+          return;
+        }
+        var copyLinkBtn=ev.target.closest&&ev.target.closest('[data-settings-copy-link]');
+        if(copyLinkBtn){
+          var linkEl=settingsBodyEl.querySelector('#settingsStorageLink');
+          copyTextToClipboard(linkEl&&linkEl.textContent||'').then(function(copied){
+            if(!copied) throw new Error('The Google Sheet link could not be copied.');
+            flashStorageCopyButton(copyLinkBtn);
+          }).catch(function(e){
+            fail('Could not copy link: '+e.message);
+          });
+          return;
+        }
+        var storageAction=ev.target.closest&&ev.target.closest('[data-settings-storage-action]');
+        if(storageAction){
+          var action=storageAction.getAttribute('data-settings-storage-action');
+          clearFail();
+          captureActiveEditorState();
+          var actionPromise;
+          if(action==='load-google'){
+            setLoadingState(true,'Loading storage','Waiting for Google authorization...');
+            actionPromise=loadExistingGoogleSheetSourceFromSettings();
+          } else if(action==='load-excel'){
+            setLoadingState(true,'Loading storage','Waiting for Excel file selection...');
+            actionPromise=loadExistingExcelSourceFromSettings();
+          } else if(action==='migrate-google'){
+            setLoadingState(true,'Migrating storage','Creating a Google Sheet from the current CAP741 data...');
+            actionPromise=migrateCurrentDataToGoogleSheet();
+          } else {
+            setLoadingState(true,'Migrating storage','Choosing where to save the migrated Excel file...');
+            actionPromise=migrateCurrentDataToExcel();
+          }
+          actionPromise.then(function(changed){
+            if(!changed) return;
+            renderAll();
+            if(settingsModal&&settingsModal.className.indexOf('open')!==-1) renderSettingsBody(settingsActiveTab);
+          }).catch(function(e){
+            if(e&&e.name!=='AbortError') fail('Could not update storage: '+e.message);
+          }).finally(function(){
+            setLoadingState(false);
+          });
           return;
         }
         var add=ev.target.closest&&ev.target.closest('[data-settings-add]');
@@ -1191,5 +1350,3 @@
         setLoadingState(false);
       })();
     })();
-
-
