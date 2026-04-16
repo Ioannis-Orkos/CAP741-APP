@@ -36,11 +36,19 @@
       var DB_STORE = 'handles';
       var LINKED_FILE_KEY = 'cap741-main-file';
       var AUTO_LOAD_DEFAULT_KEY = 'cap741-auto-load-default';
+      var STORAGE_SOURCE_KEY = 'cap741-storage-source';
+      var GOOGLE_CLIENT_ID_KEY = 'cap741-google-client-id';
       var DEFAULT_WORKBOOK_PATH = './cap741-data.xlsx';
       var BLANK_CHAPTER_FILTER = 'No Chapter';
       var LOG_HEADERS = ['Aircraft Type','A/C Reg','Chapter','Chapter Description','Date','Job No','FAULT','Task Detail','Rewriten for cap741','Approval Name','Approval stamp','Aprroval Licence No.'];
       var DATE_PLACEHOLDER = 'dd/MMM/yyyy';
       var FILTER_KEYS = ['aircraftType','aircraftReg','supervisor','chapter'];
+      var STORAGE_SOURCE_NONE = 'none';
+      var STORAGE_SOURCE_DEFAULT = 'default-excel';
+      var STORAGE_SOURCE_EXCEL = 'excel';
+      var STORAGE_SOURCE_GOOGLE = 'google-sheet';
+      var GOOGLE_SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
+      var GOOGLE_SHEET_TITLES = ['Logbook','Aircraft','Chapters','Supervisors','Info'];
       var NEW_WORKBOOK_SUPERVISOR_NAME = 'Ioannis Orkos';
       var NEW_WORKBOOK_SUPERVISOR_LICENCE = 'UK.XX.XXXXXXX';
       var NEW_WORKBOOK_TASK_TEXT = 'Dummy data test one';
@@ -58,6 +66,8 @@
       var loadOptionsEl = document.getElementById('loadOptions');
       var loadExistingBtn = document.getElementById('loadExistingBtn');
       var createNewWorkbookBtn = document.getElementById('createNewWorkbookBtn');
+      var loadGoogleSheetBtn = document.getElementById('loadGoogleSheetBtn');
+      var createGoogleSheetBtn = document.getElementById('createGoogleSheetBtn');
       var filterBtn = document.getElementById('filterBtn');
       var filterCountEl = document.getElementById('filterCount');
       var filterStripEl = document.getElementById('filterStrip');
@@ -133,6 +143,9 @@
       var settingsActiveTab = 'owner';
       var loadButtonMode = 'load';
       var linkedWorkbookName = '';
+      var activeStorageSource = { type: STORAGE_SOURCE_NONE };
+      var googleAccessToken = '';
+      var googleTokenClient = null;
 
       // ---- Filter state ----
       function emptyFilterState(){ return { aircraftType:[], aircraftReg:[], supervisor:[], chapter:[] }; }
@@ -191,21 +204,28 @@
       function scheduleLayoutRefresh(delay){ clearTimeout(layoutTimer); layoutTimer=setTimeout(refreshLayoutIfIdle,typeof delay==='number'?delay:300); }
       function scheduleLocalDraftPersist(){ return; }
       function refreshUnsavedChangesState(){ hasUnsavedChanges=settingsDirty||fullLogbookText()!==(lastSavedLogbookText||''); syncSaveButtonState(false); }
-      function syncSaveButtonState(isSaving){ if(!saveFileBtn) return; var canShow=hasWorkbookDataLoaded(); saveFileBtn.classList.toggle('open',canShow&&(!!hasUnsavedChanges||!!isSaving)); saveFileBtn.classList.toggle('saving',!!isSaving); saveFileBtn.disabled=!canShow||!!isSaving; saveFileBtn.setAttribute('aria-label',isSaving?'Saving changes to file':'Save changes to file'); saveFileBtn.title=isSaving?'Saving cap741-data.xlsx...':'Save changes to cap741-data.xlsx'; }
+      function syncSaveButtonState(isSaving){ if(!saveFileBtn) return; var canShow=hasWorkbookDataLoaded(),targetLabel=sourceType(activeStorageSource)===STORAGE_SOURCE_GOOGLE?(s(activeStorageSource.title)||'Google Sheet'):'cap741-data.xlsx'; saveFileBtn.classList.toggle('open',canShow&&(!!hasUnsavedChanges||!!isSaving)); saveFileBtn.classList.toggle('saving',!!isSaving); saveFileBtn.disabled=!canShow||!!isSaving; saveFileBtn.setAttribute('aria-label',isSaving?'Saving changes to file':'Save changes to file'); saveFileBtn.title=isSaving?('Saving '+targetLabel+'...'):('Save changes to '+targetLabel); }
       function setPrintOptionsOpen(open){ if(!printOptionsEl||!printBtn) return; printOptionsEl.classList.toggle('open',!!open); printOptionsEl.setAttribute('aria-hidden',open?'false':'true'); printBtn.classList.toggle('active',!!open); }
-      function syncLoadOptionLabels(){ if(loadExistingBtn) loadExistingBtn.textContent=loadButtonMode==='link'?'Link Existing File':'Load Existing File'; }
+      function syncLoadOptionLabels(){ if(loadExistingBtn) loadExistingBtn.textContent=loadButtonMode==='link'?'Link Existing File':'Load Existing File'; if(loadGoogleSheetBtn) loadGoogleSheetBtn.textContent=loadButtonMode==='link'?'Link Google Sheet':'Load Google Sheet'; }
       function setLoadOptionsOpen(open){ if(!loadOptionsEl||!loadBtn) return; syncLoadOptionLabels(); loadOptionsEl.classList.toggle('open',!!open); loadOptionsEl.setAttribute('aria-hidden',open?'false':'true'); loadBtn.classList.toggle('active',!!open); }
       function hasWorkbookDataLoaded(){ return !!(rows.length||AIRCRAFT_GROUP_ROWS.length||CHAPTER_OPTIONS.length||SUPERVISOR_RECORDS.length||s(LOG_OWNER_INFO.name)||s(LOG_OWNER_INFO.signature)||s(LOG_OWNER_INFO.stamp)); }
       function setLinkedWorkbookName(handle){ linkedWorkbookName=handle&&handleIsWorkbook(handle)?s(handle.name):''; }
+      function readStoredJson(key){ try { return window.localStorage ? JSON.parse(window.localStorage.getItem(key)||'null') : null; } catch(e){ return null; } }
+      function writeStoredJson(key, value){ try { if(!window.localStorage) return; if(value==null) window.localStorage.removeItem(key); else window.localStorage.setItem(key,JSON.stringify(value)); } catch(e){} }
+      function sourceType(source){ return source&&source.type ? source.type : STORAGE_SOURCE_NONE; }
+      function setActiveStorageSource(source, persist){ activeStorageSource=source||{ type: STORAGE_SOURCE_NONE }; if(persist!==false){ if(sourceType(activeStorageSource)===STORAGE_SOURCE_NONE) writeStoredJson(STORAGE_SOURCE_KEY,null); else writeStoredJson(STORAGE_SOURCE_KEY,activeStorageSource); } }
+      function loadStoredSource(){ var stored=readStoredJson(STORAGE_SOURCE_KEY); return stored&&stored.type ? stored : { type: STORAGE_SOURCE_NONE }; }
+      function googleClientId(){ try { return s((window.CAP741_GOOGLE_CONFIG&&window.CAP741_GOOGLE_CONFIG.clientId)||window.CAP741_GOOGLE_CLIENT_ID||window.localStorage&&window.localStorage.getItem(GOOGLE_CLIENT_ID_KEY)||''); } catch(e){ return ''; } }
+      function ensureGoogleClientId(interactive){ var clientId=googleClientId(); if(clientId) return clientId; if(!interactive) return ''; clientId=s(window.prompt('Enter your Google OAuth Client ID for Google Sheets access.',clientId||'')); if(clientId&&window.localStorage) window.localStorage.setItem(GOOGLE_CLIENT_ID_KEY,clientId); return clientId; }
       function shouldAutoLoadDefaultWorkbook(){ try { return window.localStorage ? window.localStorage.getItem(AUTO_LOAD_DEFAULT_KEY)!=='0' : true; } catch(e){ return true; } }
       function setAutoLoadDefaultWorkbook(enabled){ try { if(window.localStorage) window.localStorage.setItem(AUTO_LOAD_DEFAULT_KEY,enabled?'1':'0'); } catch(e){} }
       function fail(msg){ errorBox.style.display='block'; errorBox.textContent=msg; document.body.classList.add('has-top-error'); }
       function clearFail(){ errorBox.style.display='none'; errorBox.textContent=''; document.body.classList.remove('has-top-error'); }
-      function saveFailureMessage(error){ var message='Could not save: '+(error&&error.message?error.message:'Unknown error.'); if(message.toLowerCase().indexOf('close it in excel')===-1&&message.toLowerCase().indexOf('open in excel')===-1) message+=' If cap741-data.xlsx is open in Excel, close it and try again.'; return message; }
+      function saveFailureMessage(error){ var message='Could not save: '+(error&&error.message?error.message:'Unknown error.'); if(sourceType(activeStorageSource)===STORAGE_SOURCE_GOOGLE) return message; if(message.toLowerCase().indexOf('close it in excel')===-1&&message.toLowerCase().indexOf('open in excel')===-1) message+=' If cap741-data.xlsx is open in Excel, close it and try again.'; return message; }
       function filePickerSupported(){ return typeof window.showOpenFilePicker==='function'; }
       function fileSavePickerSupported(){ return typeof window.showSaveFilePicker==='function'; }
-      function syncLoadButtonAvailability(isLinked){ if(isLinked){ setLoadButtonMode('hidden'); return; } if(!filePickerSupported()){ setLoadButtonMode('hidden'); return; } setLoadButtonMode(hasWorkbookDataLoaded()?'link':'load'); }
-      function setLoadButtonMode(mode){ if(!loadBtn) return; loadButtonMode=mode||'load'; loadBtn.setAttribute('data-mode',loadButtonMode); if(loadButtonMode==='hidden'){ loadBtn.style.display='none'; setLoadOptionsOpen(false); return; } loadBtn.style.display='block'; loadBtn.textContent=loadButtonMode==='link'?'Link':'Load'; loadBtn.title=loadButtonMode==='link'?'Link Excel workbook for saving or create a new CAP741 file':'Load an existing logbook or create a new CAP741 file'; loadBtn.setAttribute('aria-label',loadButtonMode==='link'?'Link Excel workbook for saving or create a new CAP741 file':'Load an existing logbook or create a new CAP741 file'); syncLoadOptionLabels(); }
+      function syncLoadButtonAvailability(isLinked){ if(isLinked){ setLoadButtonMode('hidden'); return; } setLoadButtonMode(hasWorkbookDataLoaded()?'link':'load'); }
+      function setLoadButtonMode(mode){ if(!loadBtn) return; loadButtonMode=mode||'load'; loadBtn.setAttribute('data-mode',loadButtonMode); if(loadButtonMode==='hidden'){ loadBtn.style.display='none'; setLoadOptionsOpen(false); return; } loadBtn.style.display='block'; loadBtn.textContent=loadButtonMode==='link'?'Link':'Load'; loadBtn.title=loadButtonMode==='link'?'Link an Excel file or Google Sheet for saving':'Load an existing CAP741 source or create a new one'; loadBtn.setAttribute('aria-label',loadButtonMode==='link'?'Link an Excel file or Google Sheet for saving':'Load an existing CAP741 source or create a new one'); syncLoadOptionLabels(); }
       function s(v){ return v==null?'':String(v).trim(); }
       function esc(v){ return s(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
@@ -485,6 +505,138 @@
         setLinkedWorkbookName(handle);
         return handle;
       }
+      function googleSheetIdFromInput(value){
+        var raw=s(value);
+        if(!raw) return '';
+        var match=/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/.exec(raw);
+        return match ? match[1] : raw;
+      }
+      function promptForGoogleSheetId(){
+        return googleSheetIdFromInput(window.prompt('Enter the Google Sheet ID or paste the Google Sheet URL.','')||'');
+      }
+      function waitForGoogleIdentity(timeoutMs){
+        timeoutMs=timeoutMs||10000;
+        return new Promise(function(resolve,reject){
+          var started=Date.now();
+          (function check(){
+            if(window.google&&window.google.accounts&&window.google.accounts.oauth2){ resolve(true); return; }
+            if(Date.now()-started>=timeoutMs){ reject(new Error('Google Sign-In library did not load. Refresh the page and try again.')); return; }
+            setTimeout(check,50);
+          })();
+        });
+      }
+      async function requestGoogleAccessToken(interactive){
+        if(googleAccessToken) return googleAccessToken;
+        var clientId=ensureGoogleClientId(!!interactive);
+        if(!clientId) throw new Error('A Google OAuth Client ID is required before using Google Sheets.');
+        await waitForGoogleIdentity();
+        return await new Promise(function(resolve,reject){
+          googleTokenClient=window.google.accounts.oauth2.initTokenClient({
+            client_id: clientId,
+            scope: GOOGLE_SHEETS_SCOPE,
+            callback: function(response){
+              if(response&&response.error){
+                googleAccessToken='';
+                reject(new Error(response.error_description||response.error));
+                return;
+              }
+              googleAccessToken=s(response&&response.access_token);
+              if(!googleAccessToken){
+                reject(new Error('Google did not return an access token.'));
+                return;
+              }
+              resolve(googleAccessToken);
+            }
+          });
+          googleTokenClient.requestAccessToken({prompt:interactive?'consent':''});
+        });
+      }
+      function googleApiErrorMessage(status, bodyText){
+        var detail='';
+        try {
+          var parsed=JSON.parse(bodyText||'{}');
+          detail=s(parsed&&parsed.error&&parsed.error.message);
+        } catch(e){}
+        return detail||('Google Sheets request failed ('+status+').');
+      }
+      async function googleApiRequest(method, url, body, interactive){
+        var token=await requestGoogleAccessToken(!!interactive);
+        var response=await fetch(url,{method:method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:body==null?undefined:JSON.stringify(body)});
+        if(response.status===401&&interactive!==true){
+          googleAccessToken='';
+          token=await requestGoogleAccessToken(true);
+          response=await fetch(url,{method:method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:body==null?undefined:JSON.stringify(body)});
+        }
+        if(!response.ok) throw new Error(googleApiErrorMessage(response.status,await response.text()));
+        return response;
+      }
+      async function googleApiJson(method, url, body, interactive){
+        var response=await googleApiRequest(method,url,body,interactive);
+        if(response.status===204) return null;
+        return await response.json();
+      }
+      async function googleSpreadsheetMetadata(spreadsheetId, interactive){
+        return await googleApiJson('GET','https://sheets.googleapis.com/v4/spreadsheets/'+encodeURIComponent(spreadsheetId)+'?fields=spreadsheetId,spreadsheetUrl,properties.title,sheets.properties.title',null,interactive);
+      }
+      async function googleEnsureSheetTabs(spreadsheetId, interactive){
+        var metadata=await googleSpreadsheetMetadata(spreadsheetId,interactive),titles=Object.create(null),requests=[];
+        for(var i=0;i<((metadata&&metadata.sheets)||[]).length;i++) titles[s((((metadata.sheets[i]||{}).properties||{}).title))]=true;
+        for(var j=0;j<GOOGLE_SHEET_TITLES.length;j++) if(!titles[GOOGLE_SHEET_TITLES[j]]) requests.push({addSheet:{properties:{title:GOOGLE_SHEET_TITLES[j]}}});
+        if(requests.length) await googleApiJson('POST','https://sheets.googleapis.com/v4/spreadsheets/'+encodeURIComponent(spreadsheetId)+':batchUpdate',{requests:requests},interactive);
+        return metadata;
+      }
+      async function loadGoogleSheetState(source, interactive){
+        var spreadsheetId=s(source&&source.spreadsheetId);
+        if(!spreadsheetId) throw new Error('Google Sheet ID is missing.');
+        var metadata=await googleEnsureSheetTabs(spreadsheetId,interactive);
+        var params=new URLSearchParams();
+        for(var i=0;i<GOOGLE_SHEET_TITLES.length;i++) params.append('ranges',GOOGLE_SHEET_TITLES[i]+'!A:Z');
+        var payload=await googleApiJson('GET','https://sheets.googleapis.com/v4/spreadsheets/'+encodeURIComponent(spreadsheetId)+'/values:batchGet?'+params.toString(),null,interactive);
+        var sheets=Object.create(null),ranges=(payload&&payload.valueRanges)||[];
+        for(var j=0;j<ranges.length;j++){
+          var rangeTitle=s(((ranges[j]||{}).range||'').split('!')[0]);
+          if(rangeTitle) sheets[rangeTitle]=objectsFromMatrix(ranges[j].values||[]);
+        }
+        applySheetObjects(sheets);
+        setAutoLoadDefaultWorkbook(false);
+        setActiveStorageSource({type:STORAGE_SOURCE_GOOGLE,spreadsheetId:spreadsheetId,title:s(metadata&&metadata.properties&&metadata.properties.title)||s(source&&source.title)},true);
+        setLinkedWorkbookName(null);
+      }
+      async function saveGoogleSheetState(source, interactive){
+        var spreadsheetId=s(source&&source.spreadsheetId);
+        if(!spreadsheetId) throw new Error('No Google Sheet linked.');
+        await googleEnsureSheetTabs(spreadsheetId,interactive);
+        var defs=stateSheetDefinitions(),clearRanges=[],data=[];
+        for(var i=0;i<defs.length;i++){
+          clearRanges.push(defs[i].title+'!A:Z');
+          data.push({range:defs[i].title+'!A1',majorDimension:'ROWS',values:matrixFromObjects(defs[i].headers,defs[i].rows)});
+        }
+        await googleApiJson('POST','https://sheets.googleapis.com/v4/spreadsheets/'+encodeURIComponent(spreadsheetId)+'/values:batchClear',{ranges:clearRanges},interactive);
+        await googleApiJson('POST','https://sheets.googleapis.com/v4/spreadsheets/'+encodeURIComponent(spreadsheetId)+'/values:batchUpdate',{valueInputOption:'RAW',data:data},interactive);
+        lastSavedLogbookText=fullLogbookText();
+        settingsDirty=false;
+      }
+      async function connectExistingGoogleSheet(){
+        var spreadsheetId=promptForGoogleSheetId();
+        if(!spreadsheetId) return false;
+        await loadGoogleSheetState({spreadsheetId:spreadsheetId},true);
+        setLoadButtonMode('hidden');
+        await renderAllWithLoading('Loading Google Sheet','Rendering pages from Google Sheets...');
+        refreshUnsavedChangesState();
+        return true;
+      }
+      async function createNewGoogleSheet(){
+        if(!hasWorkbookDataLoaded()) initializeNewWorkbookState();
+        var created=await googleApiJson('POST','https://sheets.googleapis.com/v4/spreadsheets',{properties:{title:'cap741-data'},sheets:GOOGLE_SHEET_TITLES.map(function(title){ return {properties:{title:title}}; })},true);
+        var source={type:STORAGE_SOURCE_GOOGLE,spreadsheetId:s(created&&created.spreadsheetId),title:s(created&&created.properties&&created.properties.title)};
+        await saveGoogleSheetState(source,true);
+        setAutoLoadDefaultWorkbook(false);
+        setActiveStorageSource(source,true);
+        setLoadButtonMode('hidden');
+        await renderAllWithLoading('Creating Google Sheet','Rendering starter CAP741 pages...');
+        refreshUnsavedChangesState();
+        return source;
+      }
 
       // ---- Reference data state builders (from xlsx) ----
       function parseSupervisorRecordsText(text){ var lines=String(text||'').split(/\r?\n/),out=[]; for(var i=0;i<lines.length;i++){ var line=s(lines[i]); if(!line||/^id\s+/i.test(line)) continue; var cols=line.split('\t').map(function(x){ return s(x); }); while(cols.length&&!s(cols[cols.length-1])) cols.pop(); if(cols.length<4) continue; out.push({id:cols[0]||'',name:cols[1]||'',stamp:cols[2]||'',licence:cols[3]||'',scope:cols[4]||'',date:cols[5]||''}); } return out; }
@@ -494,15 +646,77 @@
       function aircraftWorkbookRows(){ return AIRCRAFT_GROUP_ROWS.map(function(item){ return {Group:s(item.group),'A/C Reg':s(item.reg),'Aircraft Type':s(item.type)}; }); }
       function chapterWorkbookRows(){ return CHAPTER_OPTIONS.map(function(label){ var p=parseChapterValue(label); return {Chapter:p.chapter,Description:p.chapterDesc}; }); }
       function supervisorWorkbookRows(){ return SUPERVISOR_RECORDS.map(function(item){ return {ID:s(item.id),'Signatory Name':s(item.name),Stamp:s(item.stamp),'License Number':s(item.licence),'Scope / Limitations':s(item.scope),Date:s(item.date)}; }); }
+      function stateSheetDefinitions(){
+        syncAllRowAircraftTypes();
+        var logRows=rows.map(function(row){ var out={}; for(var i=0;i<LOG_HEADERS.length;i++) out[LOG_HEADERS[i]]=s(LOG_HEADERS[i]==='Date'?workbookDateValue(row):row[LOG_HEADERS[i]]); return out; });
+        return [
+          { title:'Logbook', headers:LOG_HEADERS, rows:logRows },
+          { title:'Aircraft', headers:['Group','A/C Reg','Aircraft Type'], rows:aircraftWorkbookRows() },
+          { title:'Chapters', headers:['Chapter','Description'], rows:chapterWorkbookRows() },
+          { title:'Supervisors', headers:['ID','Signatory Name','Stamp','License Number','Scope / Limitations','Date'], rows:supervisorWorkbookRows() },
+          { title:'Info', headers:['Key','Value'], rows:[{Key:'Name',Value:s(LOG_OWNER_INFO.name)},{Key:'Signature',Value:s(LOG_OWNER_INFO.signature)},{Key:'Stamp',Value:s(LOG_OWNER_INFO.stamp)}] }
+        ];
+      }
+      function applySheetObjects(sheetObjects){
+        sheetObjects=sheetObjects||{};
+        var logRows=sheetObjects.Logbook||[];
+        if(logRows.length){
+          var parsed=[];
+          for(var i=0;i<logRows.length;i++){
+            var row={};
+            for(var j=0;j<LOG_HEADERS.length;j++) row[LOG_HEADERS[j]]=s(logRows[i][LOG_HEADERS[j]]);
+            parsed.push(normalizeLoadedRow(row));
+          }
+          rows=normalizeRows(parsed);
+        } else {
+          rows=normalizeRows([]);
+        }
+        applyAircraftGroupRows((sheetObjects.Aircraft||[]).map(function(r){ return {group:r.Group,reg:r['A/C Reg'],type:r['Aircraft Type']}; }));
+        syncAllRowAircraftTypes();
+        applyChapterRows((sheetObjects.Chapters||[]).map(function(r){ return {chapter:r.Chapter,description:r.Description}; }));
+        rebuildSupervisorState((sheetObjects.Supervisors||[]).map(function(r){ return {id:r.ID,name:r['Signatory Name'],stamp:r.Stamp,licence:r['License Number'],scope:r['Scope / Limitations'],date:r.Date}; }));
+        LOG_OWNER_INFO={ name:'', signature:'', stamp:'' };
+        var infoRows=sheetObjects.Info||[];
+        for(var k=0;k<infoRows.length;k++){
+          var key=normalizedText(infoRows[k].Key||infoRows[k].key),value=s(infoRows[k].Value||infoRows[k].value);
+          if(key==='name') LOG_OWNER_INFO.name=value;
+          if(key==='signature') LOG_OWNER_INFO.signature=value;
+          if(key==='stamp') LOG_OWNER_INFO.stamp=value;
+        }
+        markSharedDatalistsDirty();
+        lastSavedLogbookText=fullLogbookText();
+        settingsDirty=false;
+      }
+      function matrixFromObjects(headers, rows){
+        var values=[headers.slice()];
+        for(var i=0;i<(rows||[]).length;i++) values.push(headers.map(function(header){ return s(rows[i][header]); }));
+        return values;
+      }
+      function objectsFromMatrix(values){
+        values=values||[];
+        if(!values.length) return [];
+        var headers=(values[0]||[]).map(function(v){ return s(v); }),rowsOut=[];
+        for(var i=1;i<values.length;i++){
+          var rowValues=values[i]||[],obj={},hasValue=false;
+          for(var j=0;j<headers.length;j++){
+            var key=headers[j];
+            if(!key) continue;
+            obj[key]=s(rowValues[j]);
+            if(obj[key]) hasValue=true;
+          }
+          if(hasValue) rowsOut.push(obj);
+        }
+        return rowsOut;
+      }
 
       // ---- XLSX core ----
       function handleIsWorkbook(handle){ return !!(handle&&/\.xlsx$/i.test(s(handle.name))); }
       function workbookSheetObjects(workbook, sheetName){ var sheet=workbook&&workbook.Sheets?workbook.Sheets[sheetName]:null; if(!sheet||!window.XLSX) return []; return XLSX.utils.sheet_to_json(sheet,{defval:'',raw:false}); }
       // Workbook sheets are the source of truth on disk; this function translates them
       // into the smaller in-memory structures the UI works with.
-      function loadWorkbookFromArrayBuffer(buffer){ var workbook=XLSX.read(buffer,{type:'array'}); var logRows=workbookSheetObjects(workbook,'Logbook'); if(logRows.length){ var parsed=[]; for(var i=0;i<logRows.length;i++){ var row={}; for(var j=0;j<LOG_HEADERS.length;j++) row[LOG_HEADERS[j]]=s(logRows[i][LOG_HEADERS[j]]); parsed.push(normalizeLoadedRow(row)); } rows=normalizeRows(parsed); } applyAircraftGroupRows(workbookSheetObjects(workbook,'Aircraft').map(function(r){ return {group:r.Group,reg:r['A/C Reg'],type:r['Aircraft Type']}; })); syncAllRowAircraftTypes(); applyChapterRows(workbookSheetObjects(workbook,'Chapters').map(function(r){ return {chapter:r.Chapter,description:r.Description}; })); rebuildSupervisorState(workbookSheetObjects(workbook,'Supervisors').map(function(r){ return {id:r.ID,name:r['Signatory Name'],stamp:r.Stamp,licence:r['License Number'],scope:r['Scope / Limitations'],date:r.Date}; })); var infoRows=workbookSheetObjects(workbook,'Info'); for(var k=0;k<infoRows.length;k++){ var key=normalizedText(infoRows[k].Key||infoRows[k].key),value=s(infoRows[k].Value||infoRows[k].value); if(key==='name') LOG_OWNER_INFO.name=value; if(key==='signature') LOG_OWNER_INFO.signature=value; if(key==='stamp') LOG_OWNER_INFO.stamp=value; } markSharedDatalistsDirty(); lastSavedLogbookText=fullLogbookText(); settingsDirty=false; }
+      function loadWorkbookFromArrayBuffer(buffer){ var workbook=XLSX.read(buffer,{type:'array'}); applySheetObjects({ Logbook:workbookSheetObjects(workbook,'Logbook'), Aircraft:workbookSheetObjects(workbook,'Aircraft'), Chapters:workbookSheetObjects(workbook,'Chapters'), Supervisors:workbookSheetObjects(workbook,'Supervisors'), Info:workbookSheetObjects(workbook,'Info') }); }
       async function loadDefaultWorkbookData(){ var res=await fetch(DEFAULT_WORKBOOK_PATH,{cache:'no-store'}); if(!res.ok) throw new Error('Excel workbook returned '+res.status); loadWorkbookFromArrayBuffer(await res.arrayBuffer()); }
-      function buildWorkbookFromState(){ syncAllRowAircraftTypes(); var wb=XLSX.utils.book_new(); var logRows=rows.map(function(row){ var out={}; for(var i=0;i<LOG_HEADERS.length;i++) out[LOG_HEADERS[i]]=s(LOG_HEADERS[i]==='Date'?workbookDateValue(row):row[LOG_HEADERS[i]]); return out; }); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(logRows,{header:LOG_HEADERS}),'Logbook'); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(aircraftWorkbookRows(),{header:['Group','A/C Reg','Aircraft Type']}),'Aircraft'); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(chapterWorkbookRows(),{header:['Chapter','Description']}),'Chapters'); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(supervisorWorkbookRows(),{header:['ID','Signatory Name','Stamp','License Number','Scope / Limitations','Date']}),'Supervisors'); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet([{Key:'Name',Value:s(LOG_OWNER_INFO.name)},{Key:'Signature',Value:s(LOG_OWNER_INFO.signature)},{Key:'Stamp',Value:s(LOG_OWNER_INFO.stamp)}],{header:['Key','Value']}),'Info'); return wb; }
+      function buildWorkbookFromState(){ syncAllRowAircraftTypes(); var wb=XLSX.utils.book_new(),defs=stateSheetDefinitions(); for(var i=0;i<defs.length;i++) XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(defs[i].rows,{header:defs[i].headers}),defs[i].title); return wb; }
       async function getXlsxHandle(){ try { var stored=await loadStoredHandle(LINKED_FILE_KEY); if(stored&&handleIsWorkbook(stored)){ setLinkedWorkbookName(stored); var perm=await stored.queryPermission({mode:'readwrite'}); if(perm==='granted') return stored; perm=await stored.requestPermission({mode:'readwrite'}); if(perm==='granted') return stored; } } catch(e){} return null; }
       function isStaleHandleError(e){ return !!(e && (e.name==='InvalidStateError' || (e.message&&e.message.indexOf('state cached')!==-1))); }
       async function writeWorkbookToHandle(handle){
@@ -571,24 +785,34 @@
           handle=await pickWorkbookHandle();
           if(handle) setLoadingState(true,'Saving','Writing changes to cap741-data.xlsx...');
         }
+        if(handle){ setAutoLoadDefaultWorkbook(false); setActiveStorageSource({type:STORAGE_SOURCE_EXCEL,name:s(handle.name)},true); }
         await writeWorkbookToHandle(handle);
       }
       async function createNewWorkbookFile(){
         var handle=await pickNewWorkbookHandle();
         if(!handle) return false;
         initializeNewWorkbookState();
+        setAutoLoadDefaultWorkbook(false);
+        setActiveStorageSource({type:STORAGE_SOURCE_EXCEL,name:s(handle.name)},true);
         await writeWorkbookToHandle(handle);
         setLoadButtonMode('hidden');
         await renderAllWithLoading('Creating logbook','Rendering starter CAP741 pages...');
         refreshUnsavedChangesState();
         return true;
       }
+      async function saveActiveStorage(allowPicker){
+        if(sourceType(activeStorageSource)===STORAGE_SOURCE_GOOGLE){
+          await saveGoogleSheetState(activeStorageSource,!!allowPicker);
+          return;
+        }
+        await writeXlsx(allowPicker);
+      }
 
       // ---- Auto-save after chapter/data changes ----
-      function scheduleAutoSave(){ clearTimeout(autoSaveTimer); autoSaveTimer=setTimeout(async function(){ if(!hasUnsavedChanges) return; try { await writeXlsx(false); refreshUnsavedChangesState(); } catch(e){ /* silently fail - save button still available */ } },1500); }
+      function scheduleAutoSave(){ clearTimeout(autoSaveTimer); autoSaveTimer=setTimeout(async function(){ if(!hasUnsavedChanges) return; try { await saveActiveStorage(false); refreshUnsavedChangesState(); } catch(e){ /* silently fail - save button still available */ } },1500); }
 
       // ---- Flush / save ----
-      async function flushLinkedRewrite(force){ if(!hasUnsavedChanges&&!force) return; captureActiveEditorState(); if(saveInFlight){ saveQueued=true; return; } saveInFlight=true; syncSaveButtonState(true); try { clearFail(); await writeXlsx(!!force); refreshUnsavedChangesState(); } catch(e){ if(e&&e.name==='AbortError') fail('Save cancelled. Click Save again and choose cap741-data.xlsx to link it.'); else fail(saveFailureMessage(e)); } finally { saveInFlight=false; syncSaveButtonState(false); if(saveQueued){ saveQueued=false; flushLinkedRewrite(true); } } }
+      async function flushLinkedRewrite(force){ if(!hasUnsavedChanges&&!force) return; captureActiveEditorState(); if(saveInFlight){ saveQueued=true; return; } saveInFlight=true; syncSaveButtonState(true); try { clearFail(); await saveActiveStorage(!!force); refreshUnsavedChangesState(); } catch(e){ if(e&&e.name==='AbortError') fail('Save cancelled. Choose the storage source again and try saving once more.'); else fail(saveFailureMessage(e)); } finally { saveInFlight=false; syncSaveButtonState(false); if(saveQueued){ saveQueued=false; flushLinkedRewrite(true); } } }
 
       // ---- Settings modal with tabs ----
       function settingsTableRow(cells, kind, rowAttrs){ var html='<tr'+(rowAttrs?' '+rowAttrs:'')+'>'; for(var i=0;i<cells.length;i++) html+='<td>'+cells[i]+'</td>'; html+='<td><button type="button" class="settings-remove-btn" data-settings-remove="'+esc(kind)+'">&#x2715;</button></td></tr>'; return html; }
@@ -625,7 +849,7 @@
         tabsHtml+='</div>';
         var panelHtml='';
         if(settingsActiveTab==='owner'){
-          panelHtml='<div class="settings-tab-panel"><p class="settings-panel-copy">Used on the CAP 741 page footer.</p><div class="settings-grid"><div class="settings-field"><label>Name</label><input class="settings-input" id="settingsOwnerName" type="text" value="'+esc(LOG_OWNER_INFO.name)+'"></div><div class="settings-field"><label>Stamp</label><input class="settings-input" id="settingsOwnerStamp" type="text" value="'+esc(LOG_OWNER_INFO.stamp)+'"></div></div><div class="settings-linked-card"><div class="settings-linked-title">Linked Excel File</div><p class="settings-linked-copy" id="settingsLinkedWorkbookText">Checking remembered workbook...</p><p class="settings-linked-note">The Excel file can live in any folder. Once linked, the browser remembers it until you unlink it here.</p><div class="settings-linked-actions"><button class="settings-secondary-btn" id="unlinkWorkbookBtn" data-settings-unlink="1" type="button">Unlink workbook</button></div></div></div>';
+          panelHtml='<div class="settings-tab-panel"><p class="settings-panel-copy">Used on the CAP 741 page footer.</p><div class="settings-grid"><div class="settings-field"><label>Name</label><input class="settings-input" id="settingsOwnerName" type="text" value="'+esc(LOG_OWNER_INFO.name)+'"></div><div class="settings-field"><label>Stamp</label><input class="settings-input" id="settingsOwnerStamp" type="text" value="'+esc(LOG_OWNER_INFO.stamp)+'"></div></div><div class="settings-linked-card"><div class="settings-linked-title">Connected Storage</div><p class="settings-linked-copy" id="settingsLinkedWorkbookText">Checking remembered storage...</p><p class="settings-linked-note">You can work with either an Excel file or a Google Sheet. The app remembers the last linked source until you unlink it here.</p><div class="settings-linked-actions"><button class="settings-secondary-btn" id="unlinkWorkbookBtn" data-settings-unlink="1" type="button">Unlink source</button></div></div></div>';
         } else if(settingsActiveTab==='aircraft'){
           panelHtml='<div class="settings-tab-panel"><p class="settings-panel-copy">Manage aircraft registration, type, and group. Registration is used to auto-fill Aircraft Type when entering A/C Reg.</p><div class="settings-panel-toolbar"><button class="settings-add-row" type="button" data-settings-add="aircraft">+ Add aircraft</button></div><div class="settings-table-wrap"><table class="settings-table" data-settings-table="aircraft"><thead><tr><th>Group</th><th>A/C Reg</th><th>Aircraft Type</th><th></th></tr></thead><tbody>'+renderSettingsRows('aircraft')+'</tbody></table></div></div>';
         } else if(settingsActiveTab==='supervisors'){
@@ -644,19 +868,27 @@
         var textEl=settingsBodyEl.querySelector('#settingsLinkedWorkbookText');
         var unlinkBtn=settingsBodyEl.querySelector('#unlinkWorkbookBtn');
         if(!textEl||!unlinkBtn) return;
-        var handle=await loadStoredHandle(LINKED_FILE_KEY);
+        var source=loadStoredSource(),handle=await loadStoredHandle(LINKED_FILE_KEY);
         if(!settingsBodyEl.contains(textEl)) return;
-        var linked=!!(handle&&handleIsWorkbook(handle));
-        if(linked) setLinkedWorkbookName(handle);
-        else setLinkedWorkbookName(null);
-        textEl.textContent=linked?('Remembered workbook: '+(linkedWorkbookName||'cap741-data.xlsx')+'.'): 'No workbook is linked right now.';
+        var linked=sourceType(source)===STORAGE_SOURCE_GOOGLE?!!s(source.spreadsheetId):!!(handle&&handleIsWorkbook(handle));
+        if(sourceType(source)===STORAGE_SOURCE_GOOGLE){
+          setLinkedWorkbookName(null);
+          textEl.textContent=linked?('Remembered Google Sheet: '+(s(source.title)||s(source.spreadsheetId))+'.'):'No storage source is linked right now.';
+        } else {
+          if(linked) setLinkedWorkbookName(handle);
+          else setLinkedWorkbookName(null);
+          textEl.textContent=linked?('Remembered Excel file: '+(linkedWorkbookName||'cap741-data.xlsx')+'.'):'No storage source is linked right now.';
+        }
         unlinkBtn.disabled=!linked;
       }
       async function unlinkRememberedWorkbook(){
         var removed=await removeStoredHandle(LINKED_FILE_KEY);
-        if(!removed) throw new Error('The remembered workbook could not be cleared.');
+        var source=loadStoredSource();
+        if(!removed&&sourceType(source)!==STORAGE_SOURCE_GOOGLE) throw new Error('The remembered workbook could not be cleared.');
         setAutoLoadDefaultWorkbook(false);
         setLinkedWorkbookName(null);
+        googleAccessToken='';
+        setActiveStorageSource({type:STORAGE_SOURCE_NONE},true);
         clearWorkbookState();
         syncLoadButtonAvailability(false);
         refreshUnsavedChangesState();
@@ -736,7 +968,7 @@
       });
 
       // Save button - write xlsx
-      saveFileBtn.onclick=async function(){ captureActiveEditorState(); setLoadingState(true,'Saving','Writing changes to cap741-data.xlsx...'); try { await flushLinkedRewrite(true); } finally { setLoadingState(false); } };
+      saveFileBtn.onclick=async function(){ captureActiveEditorState(); setLoadingState(true,'Saving',sourceType(activeStorageSource)===STORAGE_SOURCE_GOOGLE?'Writing changes to Google Sheets...':'Writing changes to cap741-data.xlsx...'); try { await flushLinkedRewrite(true); } finally { setLoadingState(false); } };
 
       // Load/Link button menu
       loadBtn.onclick=function(ev){
@@ -753,6 +985,8 @@
           setLoadingState(true,loadButtonMode==='link'?'Linking file':'Loading','Waiting for Excel file selection...');
           var handle=await pickWorkbookHandle();
           if(!handle) return;
+          setAutoLoadDefaultWorkbook(false);
+          setActiveStorageSource({type:STORAGE_SOURCE_EXCEL,name:s(handle.name)},true);
           if(loadButtonMode==='link'){
             setLoadButtonMode('hidden');
             return;
@@ -778,6 +1012,32 @@
           await createNewWorkbookFile();
         } catch(e){
           if(e.name!=='AbortError') fail('Could not create Excel file: '+e.message);
+        } finally {
+          setLoadingState(false);
+        }
+      };
+      if(loadGoogleSheetBtn) loadGoogleSheetBtn.onclick=async function(ev){
+        if(ev) ev.stopPropagation();
+        try {
+          setLoadOptionsOpen(false);
+          clearFail();
+          setLoadingState(true,loadButtonMode==='link'?'Connecting Google Sheet':'Loading Google Sheet','Waiting for Google authorization...');
+          await connectExistingGoogleSheet();
+        } catch(e){
+          if(e.name!=='AbortError') fail('Could not open Google Sheet: '+e.message);
+        } finally {
+          setLoadingState(false);
+        }
+      };
+      if(createGoogleSheetBtn) createGoogleSheetBtn.onclick=async function(ev){
+        if(ev) ev.stopPropagation();
+        try {
+          setLoadOptionsOpen(false);
+          clearFail();
+          setLoadingState(true,'Creating Google Sheet','Waiting for Google authorization...');
+          await createNewGoogleSheet();
+        } catch(e){
+          if(e.name!=='AbortError') fail('Could not create Google Sheet: '+e.message);
         } finally {
           setLoadingState(false);
         }
@@ -886,24 +1146,41 @@
         await nextPaint();
         var loaded=false;
         var linked=false;
+        var storedSource=loadStoredSource();
 
-        // 1. Prefer the remembered linked workbook when one exists.
-        try {
-          var storedHandle=await loadStoredHandle(LINKED_FILE_KEY);
-          if(storedHandle&&handleIsWorkbook(storedHandle)&&await ensurePermission(storedHandle)){
-            setLinkedWorkbookName(storedHandle);
-            var file=await storedHandle.getFile();
-            loadWorkbookFromArrayBuffer(await file.arrayBuffer());
+        // 1. Prefer the remembered Google Sheet when one exists.
+        if(sourceType(storedSource)===STORAGE_SOURCE_GOOGLE){
+          try {
+            await loadGoogleSheetState(storedSource,false);
             loaded=true;
             linked=true;
+          } catch(googleErr){
+            googleAccessToken='';
+            setActiveStorageSource({type:STORAGE_SOURCE_NONE},false);
           }
-        } catch(handleErr){}
+        }
 
-        // 2. Fall back to the local default workbook when nothing is linked
+        // 2. Prefer the remembered linked workbook when one exists.
+        if(!loaded){
+          try {
+            var storedHandle=await loadStoredHandle(LINKED_FILE_KEY);
+            if(storedHandle&&handleIsWorkbook(storedHandle)&&await ensurePermission(storedHandle)){
+              setLinkedWorkbookName(storedHandle);
+              setActiveStorageSource({type:STORAGE_SOURCE_EXCEL,name:s(storedHandle.name)},false);
+              var file=await storedHandle.getFile();
+              loadWorkbookFromArrayBuffer(await file.arrayBuffer());
+              loaded=true;
+              linked=true;
+            }
+          } catch(handleErr){}
+        }
+
+        // 3. Fall back to the local default workbook when nothing is linked
         // and the user has not explicitly unlinked/cleared the app.
         if(!loaded&&shouldAutoLoadDefaultWorkbook()){
           try {
             setLinkedWorkbookName(null);
+            setActiveStorageSource({type:STORAGE_SOURCE_DEFAULT},false);
             await loadDefaultWorkbookData();
             loaded=true;
           } catch(fetchErr){}

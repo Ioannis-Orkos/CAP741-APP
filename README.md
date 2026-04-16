@@ -4,9 +4,9 @@ This project is a small browser-based app for editing and printing CAP 741 Secti
 
 It is built as a single-page app with:
 
-- `cap741-logbook-fixed.html`: the page shell and modal containers
-- `cap741-logbook-fixed.css`: the printable CAP 741 layout and UI styling
-- `cap741-logbook-fixed.js`: all application logic
+- `index.html`: the page shell and modal containers
+- `style.css`: the printable CAP 741 layout and UI styling
+- `script.js`: all application logic
 - `cap741-data.xlsx`: the workbook used as the app's persistent storage
 
 ## What the app does
@@ -46,7 +46,7 @@ That means:
 
 ## Important code sections
 
-Use these sections in `cap741-logbook-fixed.js` as your map:
+Use these sections in `script.js` as your map:
 
 - `Filter state`: filter chips, draft filters, and page filtering
 - `Row model`: creation, normalization, lookup, and grouping of rows
