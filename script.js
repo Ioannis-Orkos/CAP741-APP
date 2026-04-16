@@ -1175,19 +1175,10 @@
           } catch(handleErr){}
         }
 
-        // 3. Fall back to the local default workbook when nothing is linked
-        // and the user has not explicitly unlinked/cleared the app.
-        if(!loaded&&shouldAutoLoadDefaultWorkbook()){
-          try {
-            setLinkedWorkbookName(null);
-            setActiveStorageSource({type:STORAGE_SOURCE_DEFAULT},false);
-            await loadDefaultWorkbookData();
-            loaded=true;
-          } catch(fetchErr){}
-        }
-
         if(!loaded){
-          // Show load button for user to pick the xlsx file once
+          // If nothing is linked, stay blank and let the user choose a source.
+          setLinkedWorkbookName(null);
+          setActiveStorageSource({type:STORAGE_SOURCE_NONE},false);
           syncLoadButtonAvailability(false);
           setLoadingState(false);
           renderAll();
