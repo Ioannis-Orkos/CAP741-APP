@@ -2,8 +2,9 @@
     * { box-sizing: border-box; }
     html, body { margin:0; padding:0; background:var(--bg); color:var(--ink); font-family:Arial, Helvetica, sans-serif; }
     body.busy { cursor:progress; }
-    .error { display:none; width:var(--page-w); margin:16px auto 0; background:#fff0f0; color:#8a0000; border:1px solid #b30000; padding:12px 14px; font-size:14px; }
-    .search-shell { position:fixed; top:12px; left:50%; transform:translateX(-50%); width:min(320px, calc(100vw - 136px)); z-index:24; pointer-events:none; }
+    .error { position:fixed; top:8px; left:50%; transform:translateX(-50%); display:none; width:min(700px, calc(100vw - 24px)); background:#fff3f3; color:#8a0000; border:1px solid #b30000; box-shadow:0 12px 24px rgba(138,0,0,.12); padding:10px 14px; font-size:13px; line-height:1.4; z-index:26; }
+    body.has-top-error .search-shell { top:64px; }
+    .search-shell { position:fixed; top:12px; left:50%; transform:translateX(-50%); width:min(320px, calc(100vw - 136px)); z-index:24; pointer-events:none; transition:top .18s ease; }
     .search-box { display:flex; align-items:center; gap:7px; min-height:38px; padding:3px 5px 3px 10px; background:linear-gradient(180deg, rgba(255,255,255,.72) 0%, rgba(248,251,253,.68) 100%); border:1px solid rgba(201,212,221,.78); border-radius:999px; box-shadow:0 14px 28px rgba(23,55,74,.12), inset 0 1px 0 rgba(255,255,255,.45); backdrop-filter:blur(10px); pointer-events:auto; transition:border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
     .search-box:focus-within { border-color:#9fb5c5; box-shadow:0 16px 32px rgba(23,55,74,.18), 0 0 0 4px rgba(63,109,141,.10), inset 0 1px 0 rgba(255,255,255,.82); }
     .search-icon { flex:0 0 auto; width:16px; height:16px; color:#5d7384; display:flex; align-items:center; justify-content:center; }
@@ -170,6 +171,8 @@
     .info-copy a { color:#17374a; text-decoration:none; }
     .info-copy a:hover { text-decoration:underline; }
     @media (max-width: 720px) {
+      .error { top:8px; width:calc(100vw - 16px); padding:9px 11px; font-size:12px; }
+      body.has-top-error .search-shell { top:58px; }
       .search-shell { top:10px; width:min(290px, calc(100vw - 120px)); }
       .search-box { min-height:36px; padding-left:10px; }
       .pages { padding-top:52px; }

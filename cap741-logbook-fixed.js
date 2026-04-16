@@ -184,8 +184,9 @@
       function refreshUnsavedChangesState(){ hasUnsavedChanges=settingsDirty||fullLogbookText()!==(lastSavedLogbookText||''); syncSaveButtonState(false); }
       function syncSaveButtonState(isSaving){ if(!saveFileBtn) return; saveFileBtn.classList.toggle('open',!!hasUnsavedChanges||!!isSaving); saveFileBtn.classList.toggle('saving',!!isSaving); saveFileBtn.disabled=!!isSaving; saveFileBtn.setAttribute('aria-label',isSaving?'Saving changes to file':'Save changes to file'); saveFileBtn.title=isSaving?'Saving cap741-data.xlsx...':'Save changes to cap741-data.xlsx'; }
       function setPrintOptionsOpen(open){ if(!printOptionsEl||!printBtn) return; printOptionsEl.classList.toggle('open',!!open); printOptionsEl.setAttribute('aria-hidden',open?'false':'true'); printBtn.classList.toggle('active',!!open); }
-      function fail(msg){ errorBox.style.display='block'; errorBox.textContent=msg; }
-      function clearFail(){ errorBox.style.display='none'; errorBox.textContent=''; }
+      function fail(msg){ errorBox.style.display='block'; errorBox.textContent=msg; document.body.classList.add('has-top-error'); }
+      function clearFail(){ errorBox.style.display='none'; errorBox.textContent=''; document.body.classList.remove('has-top-error'); }
+      function saveFailureMessage(error){ var message='Could not save: '+(error&&error.message?error.message:'Unknown error.'); if(message.toLowerCase().indexOf('close it in excel')===-1&&message.toLowerCase().indexOf('open in excel')===-1) message+=' If cap741-data.xlsx is open in Excel, close it and try again.'; return message; }
       function s(v){ return v==null?'':String(v).trim(); }
       function esc(v){ return s(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
@@ -491,7 +492,7 @@
       function scheduleAutoSave(){ clearTimeout(autoSaveTimer); autoSaveTimer=setTimeout(async function(){ if(!hasUnsavedChanges) return; try { await writeXlsx(); refreshUnsavedChangesState(); } catch(e){ /* silently fail - save button still available */ } },1500); }
 
       // ---- Flush / save ----
-      async function flushLinkedRewrite(force){ if(!hasUnsavedChanges&&!force) return; captureActiveEditorState(); if(saveInFlight){ saveQueued=true; return; } saveInFlight=true; syncSaveButtonState(true); try { clearFail(); await writeXlsx(); refreshUnsavedChangesState(); } catch(e){ fail('Could not save: '+e.message); } finally { saveInFlight=false; syncSaveButtonState(false); if(saveQueued){ saveQueued=false; flushLinkedRewrite(true); } } }
+      async function flushLinkedRewrite(force){ if(!hasUnsavedChanges&&!force) return; captureActiveEditorState(); if(saveInFlight){ saveQueued=true; return; } saveInFlight=true; syncSaveButtonState(true); try { clearFail(); await writeXlsx(); refreshUnsavedChangesState(); } catch(e){ fail(saveFailureMessage(e)); } finally { saveInFlight=false; syncSaveButtonState(false); if(saveQueued){ saveQueued=false; flushLinkedRewrite(true); } } }
 
       // ---- Settings modal with tabs ----
       function settingsTableRow(cells, kind, rowAttrs){ var html='<tr'+(rowAttrs?' '+rowAttrs:'')+'>'; for(var i=0;i<cells.length;i++) html+='<td>'+cells[i]+'</td>'; html+='<td><button type="button" class="settings-remove-btn" data-settings-remove="'+esc(kind)+'">&#x2715;</button></td></tr>'; return html; }
