@@ -103,6 +103,17 @@
       var confirmTextEl = document.getElementById('confirmText');
       var confirmCancelBtn = document.getElementById('confirmCancelBtn');
       var confirmOkBtn = document.getElementById('confirmOkBtn');
+      var googleSheetModal = document.getElementById('googleSheetModal');
+      var closeGoogleSheetModalBtn = document.getElementById('closeGoogleSheetModal');
+      var googleSheetModalTitleEl = document.getElementById('googleSheetModalTitle');
+      var googleSheetModalCopyEl = document.getElementById('googleSheetModalCopy');
+      var googleSheetInputWrapEl = document.getElementById('googleSheetInputWrap');
+      var googleSheetUrlInputEl = document.getElementById('googleSheetUrlInput');
+      var googleSheetResultRowEl = document.getElementById('googleSheetResultRow');
+      var googleSheetResultLinkEl = document.getElementById('googleSheetResultLink');
+      var googleSheetModalNoteEl = document.getElementById('googleSheetModalNote');
+      var googleSheetCancelBtn = document.getElementById('googleSheetCancelBtn');
+      var googleSheetOkBtn = document.getElementById('googleSheetOkBtn');
       var closeTaskDetailBtn = document.getElementById('closeTaskDetail');
       var detailFaultEl = document.getElementById('detailFault');
       var detailTaskEl = document.getElementById('detailTask');
@@ -129,6 +140,7 @@
       var hasUnsavedChanges = false;
       var lastSavedLogbookText = '';
       var confirmResolver = null;
+      var googleSheetModalResolver = null;
       var settingsDirty = false;
       var lastTaskDetailFocus = null;
       var lastTaskDetailRowId = null;
@@ -255,6 +267,69 @@
           btn.title='Copy link';
           btn.setAttribute('aria-label',originalLabel);
         },1200);
+      }
+      function showGoogleSheetModal(options){
+        options=options||{};
+        return new Promise(function(resolve){
+          googleSheetModalResolver=resolve;
+          if(googleSheetModalTitleEl) googleSheetModalTitleEl.textContent=options.title||'Google Sheet';
+          if(googleSheetModalCopyEl) googleSheetModalCopyEl.textContent=options.copy||'';
+          if(googleSheetModalNoteEl) googleSheetModalNoteEl.textContent=options.note||'';
+          if(googleSheetInputWrapEl){
+            googleSheetInputWrapEl.hidden=!options.input;
+            googleSheetInputWrapEl.style.display=options.input?'grid':'none';
+          }
+          if(googleSheetUrlInputEl){
+            googleSheetUrlInputEl.value=options.input?(options.value||''):'';
+            googleSheetUrlInputEl.placeholder=options.placeholder||'Paste Google Sheet URL or ID';
+          }
+          var linkUrl=s(options.linkUrl);
+          if(googleSheetResultRowEl) googleSheetResultRowEl.hidden=!linkUrl;
+          if(googleSheetResultLinkEl){
+            googleSheetResultLinkEl.href=linkUrl||'#';
+            googleSheetResultLinkEl.textContent=linkUrl;
+          }
+          if(googleSheetCancelBtn) googleSheetCancelBtn.style.display=options.hideCancel?'none':'inline-flex';
+          if(googleSheetOkBtn) googleSheetOkBtn.textContent=options.okLabel||'Continue';
+          if(googleSheetModal) googleSheetModal.className='modal-backdrop open';
+          setTimeout(function(){
+            if(options.input&&googleSheetUrlInputEl){
+              googleSheetUrlInputEl.focus();
+              try { googleSheetUrlInputEl.select(); } catch(e){}
+            }
+            else if(googleSheetOkBtn) googleSheetOkBtn.focus();
+          },0);
+        });
+      }
+      function closeGoogleSheetModal(result){
+        if(googleSheetModal) googleSheetModal.className='modal-backdrop';
+        if(googleSheetModalResolver){
+          var resolve=googleSheetModalResolver;
+          googleSheetModalResolver=null;
+          resolve(result==null?null:result);
+        }
+      }
+      async function requestGoogleSheetIdFromModal(title, copyText, okLabel){
+        var value=await showGoogleSheetModal({
+          title:title||'Connect Google Sheet',
+          copy:copyText||'Paste the Google Sheet URL or just the sheet ID.',
+          note:'You can paste either the full Google Sheet URL or the sheet ID.',
+          input:true,
+          okLabel:okLabel||'Connect'
+        });
+        return googleSheetIdFromInput(value||'');
+      }
+      async function showCreatedGoogleSheetNotice(source){
+        var url=googleSheetUrl(source);
+        if(!url) return;
+        await showGoogleSheetModal({
+          title:'Google Sheet Created',
+          copy:'Your new Google Sheet is ready.',
+          note:'Take a note of this URL. You can use it later to reconnect this sheet from the app.',
+          linkUrl:url,
+          okLabel:'Close',
+          hideCancel:true
+        });
       }
       function filePickerSupported(){ return typeof window.showOpenFilePicker==='function'; }
       function fileSavePickerSupported(){ return typeof window.showSaveFilePicker==='function'; }
@@ -560,9 +635,6 @@
         var match=/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/.exec(raw);
         return match ? match[1] : raw;
       }
-      function promptForGoogleSheetId(){
-        return googleSheetIdFromInput(window.prompt('Enter the Google Sheet ID or paste the Google Sheet URL.','')||'');
-      }
       function waitForGoogleIdentity(timeoutMs){
         timeoutMs=timeoutMs||10000;
         return new Promise(function(resolve,reject){
@@ -670,8 +742,9 @@
         settingsDirty=false;
       }
       async function connectExistingGoogleSheet(){
-        var spreadsheetId=promptForGoogleSheetId();
+        var spreadsheetId=await requestGoogleSheetIdFromModal('Connect Google Sheet','Paste the Google Sheet URL or just the sheet ID to connect it.','Connect');
         if(!spreadsheetId) return false;
+        setLoadingState(true,'Loading Google Sheet','Waiting for Google authorization...');
         await loadGoogleSheetState({spreadsheetId:spreadsheetId},true);
         setLoadButtonMode('hidden');
         await renderAllWithLoading('Loading Google Sheet','Rendering pages from Google Sheets...');
@@ -704,7 +777,7 @@
       async function importDataFromGoogleSheetForLinkedSource(){
         if(sourceType(activeStorageSource)===STORAGE_SOURCE_NONE) throw new Error('Link a main storage source first, then import data into it.');
         if(!await confirmReplaceStorageLoad('a Google Sheet')) return false;
-        var spreadsheetId=promptForGoogleSheetId();
+        var spreadsheetId=await requestGoogleSheetIdFromModal('Import Google Sheet','Paste the Google Sheet URL or just the sheet ID to import its CAP741 data into the current linked source.','Import data');
         if(!spreadsheetId) return false;
         setLoadingState(true,'Importing data','Waiting for Google authorization...');
         var loaded=await fetchGoogleSheetObjects(spreadsheetId,true);
@@ -723,6 +796,8 @@
         setLoadButtonMode('hidden');
         await renderAllWithLoading('Creating Google Sheet','Rendering starter CAP741 pages...');
         refreshUnsavedChangesState();
+        setLoadingState(false);
+        await showCreatedGoogleSheetNotice(source);
         return source;
       }
 
@@ -1095,6 +1170,11 @@
       if(confirmCancelBtn) confirmCancelBtn.onclick=function(){ closeConfirmDialog(false); };
       if(confirmOkBtn) confirmOkBtn.onclick=function(){ closeConfirmDialog(true); };
       if(confirmModal) confirmModal.onclick=function(ev){ if(ev.target===confirmModal) closeConfirmDialog(false); };
+      if(closeGoogleSheetModalBtn) closeGoogleSheetModalBtn.onclick=function(){ closeGoogleSheetModal(null); };
+      if(googleSheetCancelBtn) googleSheetCancelBtn.onclick=function(){ closeGoogleSheetModal(null); };
+      if(googleSheetOkBtn) googleSheetOkBtn.onclick=function(){ closeGoogleSheetModal(googleSheetInputWrapEl&&!googleSheetInputWrapEl.hidden&&googleSheetUrlInputEl?googleSheetUrlInputEl.value:true); };
+      if(googleSheetUrlInputEl) googleSheetUrlInputEl.addEventListener('keydown',function(ev){ if(ev.key==='Enter'){ ev.preventDefault(); closeGoogleSheetModal(googleSheetUrlInputEl.value); } });
+      if(googleSheetModal) googleSheetModal.onclick=function(ev){ if(ev.target===googleSheetModal) closeGoogleSheetModal(null); };
 
       infoBtn.onclick=function(){ openInfoModal(); };
       closeInfoModalBtn.onclick=function(){ closeInfoModal(); };
@@ -1164,7 +1244,6 @@
         try {
           setLoadOptionsOpen(false);
           clearFail();
-          setLoadingState(true,loadButtonMode==='link'?'Connecting Google Sheet':'Loading Google Sheet','Waiting for Google authorization...');
           await connectExistingGoogleSheet();
         } catch(e){
           if(e.name!=='AbortError') fail('Could not open Google Sheet: '+e.message);
