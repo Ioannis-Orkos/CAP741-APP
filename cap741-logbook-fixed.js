@@ -35,6 +35,7 @@
       var DB_NAME = 'cap741-file-handles';
       var DB_STORE = 'handles';
       var LINKED_FILE_KEY = 'cap741-main-file';
+      var AUTO_LOAD_DEFAULT_KEY = 'cap741-auto-load-default';
       var DEFAULT_WORKBOOK_PATH = './cap741-data.xlsx';
       var BLANK_CHAPTER_FILTER = 'No Chapter';
       var LOG_HEADERS = ['Aircraft Type','A/C Reg','Chapter','Chapter Description','Date','Job No','FAULT','Task Detail','Rewriten for cap741','Approval Name','Approval stamp','Aprroval Licence No.'];
@@ -165,7 +166,7 @@
       function clearSearch(){ searchQuery=''; syncSearchUi(); renderAll(); }
       function rowMatchesFilters(row){ var i; if(activeFilters.aircraftType.length){ var typeMatch=false; for(i=0;i<activeFilters.aircraftType.length;i++){ if(normalizedText(aircraftLabel(row)).indexOf(normalizedText(activeFilters.aircraftType[i]))!==-1){ typeMatch=true; break; } } if(!typeMatch) return false; } if(activeFilters.aircraftReg.length){ var regMatch=false; for(i=0;i<activeFilters.aircraftReg.length;i++){ if(normalizedText(s(row['A/C Reg'])).indexOf(normalizedText(activeFilters.aircraftReg[i]))!==-1){ regMatch=true; break; } } if(!regMatch) return false; } if(activeFilters.supervisor.length){ var supervisorName=normalizedText(s(row['Approval Name'])),supervisorFull=normalizedText([s(row['Approval Name']),s(row['Approval stamp']),s(row['Aprroval Licence No.'])].filter(Boolean).join(' | ')),supervisorMatch=false; for(i=0;i<activeFilters.supervisor.length;i++){ var supervisorNeedle=normalizedText(activeFilters.supervisor[i]); if(supervisorName.indexOf(supervisorNeedle)!==-1||supervisorFull.indexOf(supervisorNeedle)!==-1){ supervisorMatch=true; break; } } if(!supervisorMatch) return false; } if(activeFilters.chapter.length){ var chapterMatch=false; for(i=0;i<activeFilters.chapter.length;i++){ var chapterNeedle=activeFilters.chapter[i]; if(chapterNeedle===BLANK_CHAPTER_FILTER){ if(!s(row['Chapter'])){ chapterMatch=true; break; } continue; } chapterNeedle=normalizedText(chapterNeedle); if(normalizedText(chapterLabelText(row)).indexOf(chapterNeedle)!==-1||normalizedText(s(row['Chapter']))===chapterNeedle){ chapterMatch=true; break; } } if(!chapterMatch) return false; } return true; }
       function rowMatchesSearch(row){ var needle=normalizedText(searchQuery); if(!needle) return true; return normalizedText(s(row['Job No'])).indexOf(needle)!==-1||normalizedText(s(row['Task Detail'])).indexOf(needle)!==-1||normalizedText(s(row['Rewriten for cap741'])).indexOf(needle)!==-1; }
-      function renderEmptyState(){ if(!hasActiveFilters()&&!hasActiveSearch()) return ''; var title='No pages match your search'; var copy='Try a different Job No or task detail search.'; var button='<button type="button" data-clear-search="1">Clear search</button>'; if(hasActiveFilters()&&hasActiveSearch()){ title='No pages match these filters and search'; copy='Try a broader search, change the filters, or clear everything to show the full logbook again.'; button='<button type="button" data-clear-all-results="1">Clear search and filters</button>'; } else if(hasActiveFilters()){ title='No pages match these filters'; copy='Try a broader mix of aircraft type, registration, supervisor, or chapter, or clear the filters to show the full logbook again.'; button='<button type="button" data-clear-filters="1">Clear filters</button>'; } return '<div class="empty-state" data-transition-key="empty-state"><div class="empty-state-title">'+title+'</div><div class="empty-state-copy">'+copy+'</div>'+button+'</div>'; }
+      function renderEmptyState(){ if(!hasWorkbookDataLoaded()&&!hasActiveFilters()&&!hasActiveSearch()) return '<div class="empty-state" data-transition-key="empty-state"><div class="empty-state-title">No workbook loaded</div><div class="empty-state-copy">Use the floating Load button to open an existing CAP741 workbook or create a new one.</div><button type="button" data-open-load-menu="1">Load or create workbook</button></div>'; var title='No pages match your search'; var copy='Try a different Job No or task detail search.'; var button='<button type="button" data-clear-search="1">Clear search</button>'; if(hasActiveFilters()&&hasActiveSearch()){ title='No pages match these filters and search'; copy='Try a broader search, change the filters, or clear everything to show the full logbook again.'; button='<button type="button" data-clear-all-results="1">Clear search and filters</button>'; } else if(hasActiveFilters()){ title='No pages match these filters'; copy='Try a broader mix of aircraft type, registration, supervisor, or chapter, or clear the filters to show the full logbook again.'; button='<button type="button" data-clear-filters="1">Clear filters</button>'; } return '<div class="empty-state" data-transition-key="empty-state"><div class="empty-state-title">'+title+'</div><div class="empty-state-copy">'+copy+'</div>'+button+'</div>'; }
 
       // ---- Utilities ----
       function setLoadingState(active, title, text){ if(loadingTitleEl&&title!=null) loadingTitleEl.textContent=title; if(loadingTextEl&&text!=null) loadingTextEl.textContent=text; if(loadingOverlay){ loadingOverlay.className=active?'loading-overlay open':'loading-overlay'; loadingOverlay.setAttribute('aria-hidden',active?'false':'true'); } document.body.classList.toggle('busy',!!active); if(loadBtn){ loadBtn.disabled=!!active; } }
@@ -196,6 +197,8 @@
       function setLoadOptionsOpen(open){ if(!loadOptionsEl||!loadBtn) return; syncLoadOptionLabels(); loadOptionsEl.classList.toggle('open',!!open); loadOptionsEl.setAttribute('aria-hidden',open?'false':'true'); loadBtn.classList.toggle('active',!!open); }
       function hasWorkbookDataLoaded(){ return !!(rows.length||AIRCRAFT_GROUP_ROWS.length||CHAPTER_OPTIONS.length||SUPERVISOR_RECORDS.length||s(LOG_OWNER_INFO.name)||s(LOG_OWNER_INFO.signature)||s(LOG_OWNER_INFO.stamp)); }
       function setLinkedWorkbookName(handle){ linkedWorkbookName=handle&&handleIsWorkbook(handle)?s(handle.name):''; }
+      function shouldAutoLoadDefaultWorkbook(){ try { return window.localStorage ? window.localStorage.getItem(AUTO_LOAD_DEFAULT_KEY)!=='0' : true; } catch(e){ return true; } }
+      function setAutoLoadDefaultWorkbook(enabled){ try { if(window.localStorage) window.localStorage.setItem(AUTO_LOAD_DEFAULT_KEY,enabled?'1':'0'); } catch(e){} }
       function fail(msg){ errorBox.style.display='block'; errorBox.textContent=msg; document.body.classList.add('has-top-error'); }
       function clearFail(){ errorBox.style.display='none'; errorBox.textContent=''; document.body.classList.remove('has-top-error'); }
       function saveFailureMessage(error){ var message='Could not save: '+(error&&error.message?error.message:'Unknown error.'); if(message.toLowerCase().indexOf('close it in excel')===-1&&message.toLowerCase().indexOf('open in excel')===-1) message+=' If cap741-data.xlsx is open in Excel, close it and try again.'; return message; }
@@ -221,6 +224,7 @@
       function parseChapterValue(raw){ var value=s(raw),parts=value.split(' - '); return {chapter:s(parts.shift()),chapterDesc:s(parts.join(' - '))}; }
       function workbookDateValue(row){ return row&&row.__dateDirty?row['Date']:(s(row&&row.__rawDate)||s(row&&row['Date'])); }
       function normalizeLoadedRow(row){ var rawDate=s(row&&row['Date']); row['Date']=formatDateDisplay(rawDate); row.__rawDate=rawDate; row.__dateDirty=false; return row; }
+      function clearWorkbookState(){ rows=normalizeRows([]); AIRCRAFT_GROUP_ROWS=[]; AIRCRAFT_MAP=Object.create(null); CHAPTER_OPTIONS=[]; LOG_OWNER_INFO={ name:'', signature:'', stamp:'' }; rebuildSupervisorState([]); activeFilters=emptyFilterState(); draftFilters=emptyFilterState(); searchQuery=''; markSharedDatalistsDirty(); settingsDirty=false; lastSavedLogbookText=fullLogbookText(); }
 
       // ---- Row model ----
       function emptyLogRow(type, chapter, chapterDesc){ return {__rowId:nextRowId(),'Aircraft Type':s(type),'A/C Reg':'','Chapter':s(chapter),'Chapter Description':s(chapterDesc),'Date':'','Job No':'','FAULT':'','Task Detail':'','Rewriten for cap741':'','Approval Name':'','Approval stamp':'','Aprroval Licence No.':''}; }
@@ -651,9 +655,13 @@
       async function unlinkRememberedWorkbook(){
         var removed=await removeStoredHandle(LINKED_FILE_KEY);
         if(!removed) throw new Error('The remembered workbook could not be cleared.');
+        setAutoLoadDefaultWorkbook(false);
         setLinkedWorkbookName(null);
+        clearWorkbookState();
         syncLoadButtonAvailability(false);
-        await updateSettingsLinkedWorkbookUi();
+        refreshUnsavedChangesState();
+        renderAll();
+        if(settingsModal&&settingsModal.className.indexOf('open')!==-1) renderSettingsBody(settingsActiveTab);
       }
       function openSettingsModal(){ if(!settingsModal||!settingsBodyEl) return; renderSettingsBody(settingsActiveTab); settingsModal.className='modal-backdrop open'; }
       function closeSettingsModal(){ if(settingsModal) settingsModal.className='modal-backdrop'; }
@@ -796,6 +804,7 @@
       // Page editing events
       pagesEl.addEventListener('focusin',function(ev){ var cell=ev.target.closest&&ev.target.closest('.editable-cell'); if(cell&&cell.innerHTML==='&nbsp;') cell.innerHTML=''; });
       pagesEl.addEventListener('click',function(ev){
+        if(ev.target&&ev.target.closest&&ev.target.closest('[data-open-load-menu="1"]')){ if(loadBtn&&loadBtn.style.display!=='none'){ setLoadOptionsOpen(true); } return; }
         if(ev.target&&ev.target.closest&&ev.target.closest('[data-clear-search="1"]')){ clearSearch(); return; }
         if(ev.target&&ev.target.closest&&ev.target.closest('[data-clear-all-results="1"]')){ clearFilters(); clearSearch(); return; }
         if(ev.target&&ev.target.closest&&ev.target.closest('[data-clear-filters="1"]')){ clearFilters(); return; }
@@ -890,8 +899,9 @@
           }
         } catch(handleErr){}
 
-        // 2. Fall back to the local default workbook when nothing is linked.
-        if(!loaded){
+        // 2. Fall back to the local default workbook when nothing is linked
+        // and the user has not explicitly unlinked/cleared the app.
+        if(!loaded&&shouldAutoLoadDefaultWorkbook()){
           try {
             setLinkedWorkbookName(null);
             await loadDefaultWorkbookData();
