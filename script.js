@@ -529,6 +529,15 @@
         setLinkedWorkbookName(handle);
         return handle;
       }
+      async function pickWorkbookHandleTransient(){
+        if(!filePickerSupported()) throw new Error('File picker not supported. Open this page via a local web server (e.g. VS Code Live Server) and use Chrome or Edge.');
+        var picked=await window.showOpenFilePicker({multiple:false,types:[{description:'CAP741 Excel workbook',accept:{'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':['.xlsx']}}],excludeAcceptAllOption:true});
+        var handle=picked&&picked[0];
+        if(!handle) return null;
+        if(!handleIsWorkbook(handle)) throw new Error('Please choose a .xlsx Excel file.');
+        if(!await ensurePermission(handle)) return null;
+        return handle;
+      }
       async function pickNewWorkbookHandle(){
         if(!fileSavePickerSupported()) throw new Error('Save file picker not supported. Use Chrome or Edge over a local web server to create a new Excel file.');
         var handle=await window.showSaveFilePicker({suggestedName:'cap741-data.xlsx',types:[{description:'CAP741 Excel workbook',accept:{'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':['.xlsx']}}],excludeAcceptAllOption:true});
@@ -625,9 +634,7 @@
         if(requests.length) await googleApiJson('POST','https://sheets.googleapis.com/v4/spreadsheets/'+encodeURIComponent(spreadsheetId)+':batchUpdate',{requests:requests},interactive);
         return metadata;
       }
-      async function loadGoogleSheetState(source, interactive){
-        var spreadsheetId=s(source&&source.spreadsheetId);
-        if(!spreadsheetId) throw new Error('Google Sheet ID is missing.');
+      async function fetchGoogleSheetObjects(spreadsheetId, interactive){
         var metadata=await googleEnsureSheetTabs(spreadsheetId,interactive);
         var params=new URLSearchParams();
         for(var i=0;i<GOOGLE_SHEET_TITLES.length;i++) params.append('ranges',GOOGLE_SHEET_TITLES[i]+'!A:Z');
@@ -637,9 +644,15 @@
           var rangeTitle=s(((ranges[j]||{}).range||'').split('!')[0]);
           if(rangeTitle) sheets[rangeTitle]=objectsFromMatrix(ranges[j].values||[]);
         }
-        applySheetObjects(sheets);
+        return { metadata: metadata, sheets: sheets };
+      }
+      async function loadGoogleSheetState(source, interactive){
+        var spreadsheetId=s(source&&source.spreadsheetId);
+        if(!spreadsheetId) throw new Error('Google Sheet ID is missing.');
+        var loaded=await fetchGoogleSheetObjects(spreadsheetId,interactive);
+        applySheetObjects(loaded.sheets);
         setAutoLoadDefaultWorkbook(false);
-        setActiveStorageSource({type:STORAGE_SOURCE_GOOGLE,spreadsheetId:spreadsheetId,title:s(metadata&&metadata.properties&&metadata.properties.title)||s(source&&source.title)},true);
+        setActiveStorageSource({type:STORAGE_SOURCE_GOOGLE,spreadsheetId:spreadsheetId,title:s(loaded.metadata&&loaded.metadata.properties&&loaded.metadata.properties.title)||s(source&&source.title)},true);
         setLinkedWorkbookName(null);
       }
       async function saveGoogleSheetState(source, interactive){
@@ -665,29 +678,40 @@
         refreshUnsavedChangesState();
         return true;
       }
+      function markImportedDataAsPendingSave(){
+        settingsDirty=true;
+        lastSavedLogbookText='';
+        refreshUnsavedChangesState();
+      }
       async function confirmReplaceStorageLoad(label){
         if(!hasWorkbookDataLoaded()) return true;
-        return await showConfirmDialog('Load Storage Source','Loading '+label+' will replace the current CAP741 data in the app. Use Migrate if you want to copy the current data first.','Load source');
+        return await showConfirmDialog('Import Into Current Source','Importing from '+label+' will replace the current CAP741 data shown in the app, but it will keep the current linked source for saving.','Import data');
       }
-      async function loadExistingExcelSourceFromSettings(){
+      async function importDataFromExcelForLinkedSource(){
+        if(sourceType(activeStorageSource)===STORAGE_SOURCE_NONE) throw new Error('Link a main storage source first, then import data into it.');
         if(!filePickerSupported()) throw new Error('File picker not supported. Open this page via a local web server (e.g. VS Code Live Server) and use Chrome or Edge.');
         if(!await confirmReplaceStorageLoad('an Excel file')) return false;
-        setLoadingState(true,'Loading','Waiting for Excel file selection...');
-        var handle=await pickWorkbookHandle();
+        setLoadingState(true,'Importing data','Waiting for Excel file selection...');
+        var handle=await pickWorkbookHandleTransient();
         if(!handle) return false;
-        setAutoLoadDefaultWorkbook(false);
-        setActiveStorageSource({type:STORAGE_SOURCE_EXCEL,name:s(handle.name)},true);
-        setLoadingState(true,'Loading','Reading workbook...');
+        setLoadingState(true,'Importing data','Reading workbook...');
         var file=await handle.getFile();
         loadWorkbookFromArrayBuffer(await file.arrayBuffer());
-        setLoadButtonMode('hidden');
-        await renderAllWithLoading('Loading logbook','Rendering pages...');
-        refreshUnsavedChangesState();
+        markImportedDataAsPendingSave();
+        await renderAllWithLoading('Importing data','Rendering imported CAP741 pages...');
         return true;
       }
-      async function loadExistingGoogleSheetSourceFromSettings(){
+      async function importDataFromGoogleSheetForLinkedSource(){
+        if(sourceType(activeStorageSource)===STORAGE_SOURCE_NONE) throw new Error('Link a main storage source first, then import data into it.');
         if(!await confirmReplaceStorageLoad('a Google Sheet')) return false;
-        return await connectExistingGoogleSheet();
+        var spreadsheetId=promptForGoogleSheetId();
+        if(!spreadsheetId) return false;
+        setLoadingState(true,'Importing data','Waiting for Google authorization...');
+        var loaded=await fetchGoogleSheetObjects(spreadsheetId,true);
+        applySheetObjects(loaded.sheets);
+        markImportedDataAsPendingSave();
+        await renderAllWithLoading('Importing data','Rendering imported CAP741 pages...');
+        return true;
       }
       async function createNewGoogleSheet(){
         if(!hasWorkbookDataLoaded()) initializeNewWorkbookState();
@@ -936,7 +960,7 @@
         if(settingsActiveTab==='owner'){
           panelHtml='<div class="settings-tab-panel"><p class="settings-panel-copy">Used on the CAP 741 page footer.</p><div class="settings-grid"><div class="settings-field"><label>Name</label><input class="settings-input" id="settingsOwnerName" type="text" value="'+esc(LOG_OWNER_INFO.name)+'"></div><div class="settings-field"><label>Stamp</label><input class="settings-input" id="settingsOwnerStamp" type="text" value="'+esc(LOG_OWNER_INFO.stamp)+'"></div></div></div>';
         } else if(settingsActiveTab==='storage'){
-          panelHtml='<div class="settings-tab-panel"><p class="settings-panel-copy">See which storage source is connected, switch to another one, or migrate the current data between local Excel and Google Sheets.</p><div class="settings-linked-card"><div class="settings-linked-title">Current Linked Storage</div><p class="settings-linked-copy" id="settingsStorageSummary">Checking remembered storage...</p><div class="settings-storage-link" id="settingsStorageLinkRow" hidden><a class="settings-storage-anchor" id="settingsStorageLink" href="#" target="_blank" rel="noreferrer noopener"></a><button class="settings-copy-btn" id="settingsCopyStorageLinkBtn" data-settings-copy-link="1" type="button" aria-label="Copy link" title="Copy link"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 9h9v11H9z"></path><path d="M6 4h9v3H8v9H6z"></path></svg></button></div><div class="settings-linked-note" id="settingsStorageNote">Migration copies the current in-browser data to a new source and then switches the app to that source.</div><div class="settings-storage-section"><div class="settings-linked-title">Load Existing Source</div><div class="settings-storage-actions"><button class="settings-secondary-btn" id="loadStorageExcelBtn" data-settings-storage-action="load-excel" type="button">Load Excel File</button><button class="settings-secondary-btn" id="loadStorageGoogleBtn" data-settings-storage-action="load-google" type="button">Load Google Sheet</button></div></div><div class="settings-storage-section"><div class="settings-linked-title">Migrate Current Data</div><div class="settings-storage-actions"><button class="settings-secondary-btn" id="migrateToExcelBtn" data-settings-storage-action="migrate-excel" type="button">Migrate To Excel</button><button class="settings-secondary-btn" id="migrateToGoogleBtn" data-settings-storage-action="migrate-google" type="button">Migrate To Google Sheet</button><button class="settings-secondary-btn" id="unlinkWorkbookBtn" data-settings-unlink="1" type="button">Unlink Source</button></div></div></div></div>';
+          panelHtml='<div class="settings-tab-panel"><p class="settings-panel-copy">See which storage source is connected, import CAP741 data from another source into it, or migrate the current data between local Excel and Google Sheets.</p><div class="settings-linked-card"><div class="settings-linked-title">Current Linked Storage</div><p class="settings-linked-copy" id="settingsStorageSummary">Checking remembered storage...</p><div class="settings-storage-link" id="settingsStorageLinkRow" hidden><a class="settings-storage-anchor" id="settingsStorageLink" href="#" target="_blank" rel="noreferrer noopener"></a><button class="settings-copy-btn" id="settingsCopyStorageLinkBtn" data-settings-copy-link="1" type="button" aria-label="Copy link" title="Copy link"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 9h9v11H9z"></path><path d="M6 4h9v3H8v9H6z"></path></svg></button></div><div class="settings-linked-note" id="settingsStorageNote">Migration copies the current in-browser data to a new source and then switches the app to that source.</div><div class="settings-storage-section"><div class="settings-storage-actions"><button class="settings-secondary-btn" id="loadStorageExcelBtn" data-settings-storage-action="import-excel" type="button">Import Excel File</button><button class="settings-secondary-btn" id="loadStorageGoogleBtn" data-settings-storage-action="import-google" type="button">Import Google Sheet</button></div></div><div class="settings-storage-section"><div class="settings-linked-title">Migrate Current Data</div><div class="settings-storage-actions"><button class="settings-secondary-btn" id="migrateToExcelBtn" data-settings-storage-action="migrate-excel" type="button">Migrate To Excel</button><button class="settings-secondary-btn" id="migrateToGoogleBtn" data-settings-storage-action="migrate-google" type="button">Migrate To Google Sheet</button><button class="settings-secondary-btn" id="unlinkWorkbookBtn" data-settings-unlink="1" type="button">Unlink Source</button></div></div></div></div>';
         } else if(settingsActiveTab==='aircraft'){
           panelHtml='<div class="settings-tab-panel"><p class="settings-panel-copy">Manage aircraft registration, type, and group. Registration is used to auto-fill Aircraft Type when entering A/C Reg.</p><div class="settings-panel-toolbar"><button class="settings-add-row" type="button" data-settings-add="aircraft">+ Add aircraft</button></div><div class="settings-table-wrap"><table class="settings-table" data-settings-table="aircraft"><thead><tr><th>Group</th><th>A/C Reg</th><th>Aircraft Type</th><th></th></tr></thead><tbody>'+renderSettingsRows('aircraft')+'</tbody></table></div></div>';
         } else if(settingsActiveTab==='supervisors'){
@@ -988,15 +1012,16 @@
           if(copyBtn) copyBtn.disabled=true;
         }
         unlinkBtn.disabled=!linked;
-        loadExcelBtn.disabled=false;
-        loadGoogleBtn.disabled=false;
+        loadExcelBtn.disabled=!linked;
+        loadGoogleBtn.disabled=!linked;
         migrateExcelBtn.disabled=!hasWorkbookDataLoaded()||sourceType(activeStorageSource)===STORAGE_SOURCE_EXCEL;
         migrateGoogleBtn.disabled=!hasWorkbookDataLoaded()||sourceType(activeStorageSource)===STORAGE_SOURCE_GOOGLE;
         if(noteEl){
-          if(!hasWorkbookDataLoaded()) noteEl.textContent='Use "Load Excel File" or "Load Google Sheet" to open a source. Migration becomes available after CAP741 data is loaded.';
-          else if(sourceType(activeStorageSource)===STORAGE_SOURCE_GOOGLE) noteEl.textContent='Load switches the app to another source. Use "Migrate To Excel" to copy the current Google Sheet data into a new Excel file and switch the app to that file.';
-          else if(sourceType(activeStorageSource)===STORAGE_SOURCE_EXCEL||sourceType(activeStorageSource)===STORAGE_SOURCE_DEFAULT) noteEl.textContent='Load switches the app to another source. Use "Migrate To Google Sheet" to copy the current Excel data into a new Google Sheet and switch the app to that sheet.';
-          else noteEl.textContent='Load switches the app to another source. Migration copies the current in-browser data to a new source and then switches the app to that source.';
+          if(!linked) noteEl.textContent='Link a main storage source first. Import keeps that linked source and only replaces the in-app CAP741 data before you save.';
+          else if(!hasWorkbookDataLoaded()) noteEl.textContent='Import loads CAP741 data from another source into the app but keeps the current linked source for saving.';
+          else if(sourceType(activeStorageSource)===STORAGE_SOURCE_GOOGLE) noteEl.textContent='Import replaces the in-app data from another source but keeps this Google Sheet as the save target. Use "Migrate To Excel" if you want to switch to a new Excel file instead.';
+          else if(sourceType(activeStorageSource)===STORAGE_SOURCE_EXCEL||sourceType(activeStorageSource)===STORAGE_SOURCE_DEFAULT) noteEl.textContent='Import replaces the in-app data from another source but keeps this Excel file as the save target. Use "Migrate To Google Sheet" if you want to switch to a new Google Sheet instead.';
+          else noteEl.textContent='Import replaces the in-app data but keeps the current linked source for saving. Migration copies the current data to a new source and switches the app to it.';
         }
       }
       async function unlinkRememberedWorkbook(){
@@ -1190,12 +1215,10 @@
           clearFail();
           captureActiveEditorState();
           var actionPromise;
-          if(action==='load-google'){
-            setLoadingState(true,'Loading storage','Waiting for Google authorization...');
-            actionPromise=loadExistingGoogleSheetSourceFromSettings();
-          } else if(action==='load-excel'){
-            setLoadingState(true,'Loading storage','Waiting for Excel file selection...');
-            actionPromise=loadExistingExcelSourceFromSettings();
+          if(action==='import-google'){
+            actionPromise=importDataFromGoogleSheetForLinkedSource();
+          } else if(action==='import-excel'){
+            actionPromise=importDataFromExcelForLinkedSource();
           } else if(action==='migrate-google'){
             setLoadingState(true,'Migrating storage','Creating a Google Sheet from the current CAP741 data...');
             actionPromise=migrateCurrentDataToGoogleSheet();
@@ -1208,7 +1231,7 @@
             renderAll();
             if(settingsModal&&settingsModal.className.indexOf('open')!==-1) renderSettingsBody(settingsActiveTab);
           }).catch(function(e){
-            if(e&&e.name!=='AbortError') fail('Could not update storage: '+e.message);
+            if(e&&e.name!=='AbortError') fail((action.indexOf('import-')===0?'Could not import data: ':'Could not update storage: ')+e.message);
           }).finally(function(){
             setLoadingState(false);
           });
