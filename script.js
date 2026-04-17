@@ -206,13 +206,13 @@
       function normalizedText(value){ return s(value).toLowerCase(); }
       function chapterLabelText(row){ var chapter=s(row['Chapter']),desc=s(row['Chapter Description']); return desc?chapter+' - '+desc:chapter; }
       function fieldAffectsRowLayout(field){ return field==='Task Detail'||field==='Rewriten for cap741'||field==='Approval Name'||field==='Aprroval Licence No.'; }
-      function fieldNeedsLiveLayoutRefresh(field){ return field==='Task Detail'||field==='Approval Name'||field==='Aprroval Licence No.'; }
+      function fieldNeedsLiveLayoutRefresh(field){ return field==='Task Detail'||field==='Rewriten for cap741'||field==='Approval Name'||field==='Aprroval Licence No.'; }
       function captureContentEditableSelection(root){ var sel=window.getSelection&&window.getSelection(); if(!sel||!sel.rangeCount) return {start:0,end:0}; var range=sel.getRangeAt(0); if(!root.contains(range.startContainer)||!root.contains(range.endContainer)) return {start:0,end:0}; var startRange=document.createRange(); startRange.selectNodeContents(root); startRange.setEnd(range.startContainer,range.startOffset); var endRange=document.createRange(); endRange.selectNodeContents(root); endRange.setEnd(range.endContainer,range.endOffset); return {start:startRange.toString().length,end:endRange.toString().length}; }
       function setContentEditableSelection(root, start, end){ var walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,null); var node,pos=0,startNode=null,endNode=null,startOffset=0,endOffset=0; while((node=walker.nextNode())){ var next=pos+node.nodeValue.length; if(startNode==null&&start<=next){ startNode=node; startOffset=Math.max(0,start-pos); } if(endNode==null&&end<=next){ endNode=node; endOffset=Math.max(0,end-pos); break; } pos=next; } var range=document.createRange(); if(startNode&&endNode){ range.setStart(startNode,startOffset); range.setEnd(endNode,endOffset); } else { range.selectNodeContents(root); range.collapse(false); } var sel=window.getSelection&&window.getSelection(); if(sel){ sel.removeAllRanges(); sel.addRange(range); } }
       function captureEditorSnapshot(target){ var el=target&&target.closest?(target.closest('.editable-cell')||target.closest('input.field-input[data-edit-field], input.field-input[data-new-row]')):null; if(!el) return null; var field=el.getAttribute('data-edit-field'),rowId=el.getAttribute('data-row-id'); if(!field||rowId==null) return null; var snapshot={field:field,rowId:rowId,isInput:el.tagName==='INPUT',scrollX:window.scrollX,scrollY:window.scrollY}; if(snapshot.isInput){ snapshot.start=typeof el.selectionStart==='number'?el.selectionStart:null; snapshot.end=typeof el.selectionEnd==='number'?el.selectionEnd:snapshot.start; } else { var selection=captureContentEditableSelection(el); snapshot.start=selection.start; snapshot.end=selection.end; } return snapshot; }
       function restoreEditorSnapshot(snapshot){ if(!snapshot) return; var selector='[data-row-id="'+snapshot.rowId+'"][data-edit-field="'+snapshot.field+'"]'; var el=pagesEl.querySelector(selector); if(!el||typeof el.focus!=='function') return; try { el.focus({preventScroll:true}); } catch(e){ el.focus(); } if(snapshot.isInput){ if(typeof el.setSelectionRange==='function'&&snapshot.start!=null){ try { el.setSelectionRange(snapshot.start,snapshot.end==null?snapshot.start:snapshot.end); } catch(e){} } } else { setContentEditableSelection(el,snapshot.start||0,snapshot.end||snapshot.start||0); } if(typeof window.scrollTo==='function') window.scrollTo(snapshot.scrollX||0,snapshot.scrollY||0); }
       function refreshLayoutPreservingEditor(){ var snapshot=liveLayoutEditorState; liveLayoutEditorState=null; renderAll(); restoreEditorSnapshot(snapshot); }
-      function scheduleLiveLayoutRefresh(snapshot, delay){ liveLayoutEditorState=snapshot; clearTimeout(layoutTimer); layoutTimer=setTimeout(refreshLayoutPreservingEditor,typeof delay==='number'?delay:120); }
+      function scheduleLiveLayoutRefresh(snapshot, delay){ liveLayoutEditorState=snapshot; clearTimeout(layoutTimer); layoutTimer=setTimeout(refreshLayoutPreservingEditor,typeof delay==='number'?delay:60); }
       function refreshLayoutIfIdle(){ if(editorIsActive()){ scheduleLayoutRefresh(350); return; } renderAll(); }
       function scheduleLayoutRefresh(delay){ clearTimeout(layoutTimer); layoutTimer=setTimeout(refreshLayoutIfIdle,typeof delay==='number'?delay:300); }
       function scheduleLocalDraftPersist(){ return; }
@@ -1384,8 +1384,7 @@
         if(ev.target.matches&&ev.target.matches('[data-group-field]')) return;
         updateRowFromEditor(cell);
         if(fieldNeedsLiveLayoutRefresh(cell.getAttribute('data-edit-field'))){
-          if(hasActiveFilters()) return;
-          scheduleLiveLayoutRefresh(captureEditorSnapshot(ev.target),120);
+          scheduleLiveLayoutRefresh(captureEditorSnapshot(ev.target),40);
         }
       });
       pagesEl.addEventListener('blur',function(ev){
