@@ -299,7 +299,8 @@
       @page { size:A5 landscape; margin:0; }
       html, body { width:var(--page-w); height:var(--page-h); background:#fff; }
       .error, .search-shell, .print-fab, .add-fab, .load-fab, .filter-fab, .save-fab, .settings-fab, .info-fab, .print-options, .load-options, .filter-strip, .modal-backdrop, .loading-overlay, .task-expand, .sup-clear, .row-lock { display:none !important; }
-      body.print-current .page.print-exclude { display:none !important; }
+      body.print-current .page.print-exclude,
+      body.print-current-overlay .page.print-exclude { display:none !important; }
       .pages { padding:0; }
       .page {
         width:var(--page-w);
@@ -346,6 +347,53 @@
       }
       .date-native {
         display:none !important;
+      }
+      body.print-current-overlay .page {
+        page-break-after:auto;
+      }
+      body.print-current-overlay .headrow,
+      body.print-current-overlay .topline,
+      body.print-current-overlay .title,
+      body.print-current-overlay .dots-row,
+      body.print-current-overlay .declaration-row,
+      body.print-current-overlay .owner-row,
+      body.print-current-overlay .bottomline,
+      body.print-current-overlay .footer-id {
+        visibility:hidden !important;
+      }
+      body.print-current-overlay .frame,
+      body.print-current-overlay table.sheet,
+      body.print-current-overlay table.sheet thead th,
+      body.print-current-overlay table.sheet td {
+        border:0 !important;
+        box-shadow:none !important;
+        background:transparent !important;
+      }
+      body.print-current-overlay table.sheet thead th {
+        color:transparent !important;
+        -webkit-text-fill-color:transparent !important;
+        text-shadow:none !important;
+      }
+      body.print-current-overlay .signed-row td,
+      body.print-current-overlay .locked-cell,
+      body.print-current-overlay .locked-text,
+      body.print-current-overlay .date-cell-wrap,
+      body.print-current-overlay .task-wrap,
+      body.print-current-overlay .task,
+      body.print-current-overlay .sup {
+        background:transparent !important;
+        box-shadow:none !important;
+      }
+      body.print-current-overlay .locked-text {
+        border-radius:0 !important;
+      }
+      body.print-current-overlay .signed-row td > * {
+        visibility:hidden !important;
+      }
+      body.print-current-overlay .star,
+      body.print-current-overlay .declaration-star,
+      body.print-current-overlay .declaration-text {
+        visibility:hidden !important;
       }
     }
 

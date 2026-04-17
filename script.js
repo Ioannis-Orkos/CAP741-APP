@@ -76,6 +76,7 @@
       var printBtn = document.getElementById('printBtn');
       var printOptionsEl = document.getElementById('printOptions');
       var printCurrentBtn = document.getElementById('printCurrentBtn');
+      var printCurrentOverlayBtn = document.getElementById('printCurrentOverlayBtn');
       var printAllBtn = document.getElementById('printAllBtn');
       var saveFileBtn = document.getElementById('saveFileBtn');
       var infoBtn = document.getElementById('infoBtn');
@@ -588,8 +589,9 @@
       // ---- Print ----
       function pageElements(){ return Array.prototype.slice.call(pagesEl.querySelectorAll('.page')); }
       function currentVisiblePage(){ var pages=pageElements(); if(!pages.length) return null; var viewportMid=window.innerHeight/2,best=pages[0],bestDistance=Infinity; for(var i=0;i<pages.length;i++){ var rect=pages[i].getBoundingClientRect(),center=rect.top+(rect.height/2),distance=Math.abs(center-viewportMid); if(rect.top<=viewportMid&&rect.bottom>=viewportMid) return pages[i]; if(distance<bestDistance){ bestDistance=distance; best=pages[i]; } } return best; }
-      function clearPrintSelection(){ var pages=pageElements(); document.body.classList.remove('print-current'); for(var i=0;i<pages.length;i++) pages[i].classList.remove('print-exclude'); printMode=''; }
+      function clearPrintSelection(){ var pages=pageElements(); document.body.classList.remove('print-current','print-current-overlay'); for(var i=0;i<pages.length;i++) pages[i].classList.remove('print-exclude'); printMode=''; }
       function printCurrentPage(){ var current=currentVisiblePage(),pages=pageElements(); clearPrintSelection(); if(!current||!pages.length){ window.print(); return; } document.body.classList.add('print-current'); for(var i=0;i<pages.length;i++){ if(pages[i]!==current) pages[i].classList.add('print-exclude'); } printMode='current'; window.print(); }
+      function printCurrentPageOverlay(){ var current=currentVisiblePage(),pages=pageElements(); clearPrintSelection(); if(!current||!pages.length){ window.print(); return; } document.body.classList.add('print-current-overlay'); for(var i=0;i<pages.length;i++){ if(pages[i]!==current) pages[i].classList.add('print-exclude'); } printMode='current-overlay'; window.print(); }
       function printAllPages(){ clearPrintSelection(); printMode='all'; window.print(); }
 
       // ---- Editor active state ----
@@ -1288,6 +1290,7 @@
 
       printBtn.onclick=function(ev){ if(ev) ev.stopPropagation(); setLoadOptionsOpen(false); setPrintOptionsOpen(!(printOptionsEl&&printOptionsEl.classList.contains('open'))); };
       printCurrentBtn.onclick=function(){ setPrintOptionsOpen(false); printCurrentPage(); };
+      if(printCurrentOverlayBtn) printCurrentOverlayBtn.onclick=function(){ setPrintOptionsOpen(false); printCurrentPageOverlay(); };
       printAllBtn.onclick=function(){ setPrintOptionsOpen(false); printAllPages(); };
       document.addEventListener('click',function(ev){
         var insidePrint=!!(ev.target.closest&&(ev.target.closest('#printBtn')||ev.target.closest('#printOptions')));
