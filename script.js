@@ -41,7 +41,7 @@
       var GOOGLE_CLIENT_ID = '647645362385-rj453g1g2g79hh9vorp1guvp7e9c8b9b.apps.googleusercontent.com';
       var DEFAULT_WORKBOOK_PATH = './cap741-data.xlsx';
       var BLANK_CHAPTER_FILTER = 'No Chapter';
-      var LOG_HEADERS = ['Aircraft Type','A/C Reg','Chapter','Chapter Description','Date','Job No','FAULT','Task Detail','Rewriten for cap741','Approval Name','Approval stamp','Aprroval Licence No.'];
+      var LOG_HEADERS = ['Aircraft Type','A/C Reg','Chapter','Chapter Description','Date','Job No','FAULT','Task Detail','Rewriten for cap741','Approval Name','Approval stamp','Aprroval Licence No.','Signed'];
       var DATE_PLACEHOLDER = 'dd/MMM/yyyy';
       var FILTER_KEYS = ['aircraftType','aircraftReg','supervisor','chapter'];
       var STORAGE_SOURCE_NONE = 'none';
@@ -356,10 +356,10 @@
       function clearWorkbookState(){ rows=normalizeRows([]); AIRCRAFT_GROUP_ROWS=[]; AIRCRAFT_MAP=Object.create(null); CHAPTER_OPTIONS=[]; LOG_OWNER_INFO={ name:'', signature:'', stamp:'' }; rebuildSupervisorState([]); activeFilters=emptyFilterState(); draftFilters=emptyFilterState(); searchQuery=''; markSharedDatalistsDirty(); settingsDirty=false; lastSavedLogbookText=fullLogbookText(); }
 
       // ---- Row model ----
-      function emptyLogRow(type, chapter, chapterDesc){ return {__rowId:nextRowId(),'Aircraft Type':s(type),'A/C Reg':'','Chapter':s(chapter),'Chapter Description':s(chapterDesc),'Date':'','Job No':'','FAULT':'','Task Detail':'','Rewriten for cap741':'','Approval Name':'','Approval stamp':'','Aprroval Licence No.':''}; }
+      function emptyLogRow(type, chapter, chapterDesc){ return {__rowId:nextRowId(),'Aircraft Type':s(type),'A/C Reg':'','Chapter':s(chapter),'Chapter Description':s(chapterDesc),'Date':'','Job No':'','FAULT':'','Task Detail':'','Rewriten for cap741':'','Approval Name':'','Approval stamp':'','Aprroval Licence No.':'','Signed':''}; }
       function rowHasEntryContent(row){ return !!(s(row['Date'])||s(row['A/C Reg'])||s(row['Job No'])||s(row['FAULT'])||s(row['Task Detail'])||s(row['Rewriten for cap741'])||s(row['Approval Name'])||s(row['Approval stamp'])||s(row['Aprroval Licence No.'])); }
       function nonEmptyRows(list){ var out=[]; for(var i=0;i<(list||[]).length;i++){ if(rowHasEntryContent(list[i]||{})) out.push(list[i]); } return out; }
-      function normalizeRows(list){ list=nonEmptyRows(list); rowsById=Object.create(null); var max=-1; for(var i=0;i<list.length;i++){ var id=Number(list[i].__rowId); if(!isFinite(id)||id<0) id=i; list[i].__rowId=id; rowsById[String(id)]=list[i]; if(id>max) max=id; } nextRowIdValue=max+1; return list; }
+      function normalizeRows(list){ list=nonEmptyRows(list); rowsById=Object.create(null); var max=-1; for(var i=0;i<list.length;i++){ var id=Number(list[i].__rowId); if(!isFinite(id)||id<0) id=i; list[i].__rowId=id; list[i]['Signed']=isRowSigned(list[i])?'true':''; if(!isFinite(Number(list[i].__signedSlot))) list[i].__signedSlot=-1; rowsById[String(id)]=list[i]; if(id>max) max=id; } nextRowIdValue=max+1; return list; }
       function appendRows(list){ for(var i=0;i<list.length;i++){ var row=list[i]; var id=Number(row.__rowId); if(!isFinite(id)||id<0) id=nextRowId(); if(id>=nextRowIdValue) nextRowIdValue=id+1; row.__rowId=id; rowsById[String(id)]=row; rows.push(row); } }
       function nextRowId(){ return nextRowIdValue++; }
       function rowById(id){ return rowsById[String(id)]||null; }
@@ -387,6 +387,25 @@
       function extractSupervisorParts(value){ var resolved=normalizeSupervisorValue(value); return {name:resolved.name,stamp:resolved.stamp,licence:resolved.licence}; }
       function fillSupervisorFields(nameInput, licenceInput, row){ if(!nameInput) return null; var resolved=normalizeSupervisorValue(nameInput.value); if(resolved.name) nameInput.value=resolved.name; if(licenceInput&&resolved.licence) licenceInput.value=resolved.licence; if(row){ row['Approval Name']=resolved.name; row['Approval stamp']=resolved.stamp; if(resolved.licence) row['Aprroval Licence No.']=resolved.licence; } return resolved; }
       function setRowSupervisorFields(row, nameValue, licenceValue){ var resolved=normalizeSupervisorValue(nameValue); row['Approval Name']=resolved.name; row['Approval stamp']=resolved.stamp; row['Aprroval Licence No.']=licenceValue||resolved.licence||''; }
+      function isRowSigned(row){ var value=normalizedText(row&&row['Signed']); return value==='yes'||value==='signed'||value==='true'||value==='1'; }
+      function signedSlotFor(row){ var slot=Number(row&&row.__signedSlot); return isFinite(slot)&&slot>=0?slot:-1; }
+      function setRowSignedState(row, signed, slotStart){ if(!row) return; row['Signed']=signed?'true':''; row.__signedSlot=signed&&isFinite(slotStart)&&slotStart>=0?slotStart:-1; }
+      function initializeSignedSlots(list){
+        function sortByDate(a,b){ var da=parseDate(a['Date']),db=parseDate(b['Date']); if(da!==db) return da-db; return (Number(a.__rowId)||0)-(Number(b.__rowId)||0); }
+        function nextSlotFit(start, units){ var offset=start%PAGE_SLOTS; if(offset&&offset+units>PAGE_SLOTS) return start+(PAGE_SLOTS-offset); return start; }
+        var groups=groupRows(list||[]);
+        for(var i=0;i<groups.length;i++){
+          var groupRowsSorted=(groups[i].rows||[]).slice().sort(sortByDate),cursor=0;
+          for(var j=0;j<groupRowsSorted.length;j++){
+            var row=groupRowsSorted[j],slot=signedSlotFor(row),units=unitsFor(row);
+            if(slot<0&&isRowSigned(row)){
+              cursor=nextSlotFit(cursor,units);
+              row.__signedSlot=cursor;
+            }
+            cursor=nextSlotFit(cursor,units)+units;
+          }
+        }
+      }
 
       // ---- Aircraft / Chapter options HTML ----
       function safeIdPart(value){ return s(value).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'')||'group'; }
@@ -415,9 +434,26 @@
       function syncDotsInputSize(input){ if(!input||!input.classList||!input.classList.contains('dots-input')) return; input.size=dotsInputSize(valueOf(input)); }
       function editableTextInput(field, rowId, value, placeholder, extraClass, listId){ return '<input class="field-input '+(extraClass||'')+'" type="text"'+(listId?' list="'+listId+'"':'')+' data-row-id="'+rowId+'" data-edit-field="'+field+'" value="'+esc(value||'')+'"'+(placeholder?' placeholder="'+esc(placeholder)+'"':'')+'>';}
       function editableCell(field, rowId, value, cls){ return '<div class="editable-cell '+(cls||'')+'" contenteditable="true" data-row-id="'+rowId+'" data-edit-field="'+field+'">'+(esc(value)||'&nbsp;')+'</div>'; }
-      function clearSupervisorButtonHtml(){ return '<button class="sup-clear" type="button" data-clear-supervisor="1" aria-label="Clear supervisor details">Clear</button>'; }
-      function editableSupervisorCell(row){ return '<div class="sup"><span class="star">*</span>'+editableTextInput('Approval Name',row.__rowId,row['Approval Name'],'Supervisor','name','supervisor-list')+editableTextInput('Aprroval Licence No.',row.__rowId,row['Aprroval Licence No.'],'Licence number','licence')+clearSupervisorButtonHtml()+'</div>'; }
-      function taskCellHtml(row){ return '<div class="task-wrap"><div class="task">'+editableCell('Rewriten for cap741',row.__rowId,mainPageTaskText(row),'task-input')+'</div><button class="task-expand" type="button" data-open-task="1" data-row-id="'+row.__rowId+'" aria-label="Show full task detail">&#x2197;</button></div>'; }
+      function staticTextCell(value, cls){ return '<div class="'+(cls||'locked-cell')+'">'+(esc(value)||'&nbsp;')+'</div>'; }
+      function signToggleButtonHtml(row){
+        var signed=isRowSigned(row);
+        return '<button class="row-lock'+(signed?' is-signed':'')+'" type="button" data-toggle-signed="1" data-row-id="'+row.__rowId+'" aria-label="'+(signed?'Unlock signed row':'Lock and sign row')+'" title="'+(signed?'Unlock row':'Lock row')+'"><span class="row-lock-icon" aria-hidden="true">'+(signed?'&#128274;':'&#128275;')+'</span></button>';
+      }
+      function clearRowButtonHtml(row){
+        return '<button class="sup-clear" type="button" data-clear-supervisor="1" data-row-id="'+row.__rowId+'" aria-label="Clear row" title="Clear row">Clear</button>';
+      }
+      function editableSupervisorCell(row){
+        var clearAction=clearRowButtonHtml(row);
+        if(isRowSigned(row)) return '<div class="sup sup-locked"><span class="star">*</span>'+staticTextCell(row['Approval Name'],'name locked-text')+staticTextCell(row['Aprroval Licence No.'],'licence locked-text')+clearAction+'</div>';
+        return '<div class="sup"><span class="star">*</span>'+editableTextInput('Approval Name',row.__rowId,row['Approval Name'],'Supervisor','name','supervisor-list')+editableTextInput('Aprroval Licence No.',row.__rowId,row['Aprroval Licence No.'],'Licence number','licence')+clearAction+'</div>';
+      }
+      function dateCellHtml(row){
+        var dateContent=isRowSigned(row)
+          ? staticTextCell(formatDateDisplay(row['Date']),'locked-cell date-locked')
+          : dateControlHtml(' data-row-id="'+row.__rowId+'" data-edit-field="Date"',DATE_PLACEHOLDER,formatDateDisplay(row['Date']),toIsoInputDate(row['Date']));
+        return '<div class="date-cell-wrap">'+signToggleButtonHtml(row)+dateContent+'</div>';
+      }
+      function taskCellHtml(row){ if(isRowSigned(row)) return '<div class="task-wrap task-wrap-locked"><div class="task">'+staticTextCell(mainPageTaskText(row),'task-input locked-text')+'</div></div>'; return '<div class="task-wrap"><div class="task">'+editableCell('Rewriten for cap741',row.__rowId,mainPageTaskText(row),'task-input')+'</div><button class="task-expand" type="button" data-open-task="1" data-row-id="'+row.__rowId+'" aria-label="Show full task detail">&#x2197;</button></div>'; }
       function blankTaskCellHtml(type, chapter, chapterDesc, regListId){ return '<div class="task-wrap"><div class="task">'+blankEditableCell('Rewriten for cap741',type,chapter,chapterDesc,regListId)+'</div><button class="task-expand" type="button" data-open-task-new="1" aria-label="Show full task detail">&#x2197;</button></div>'; }
       function dateControlHtml(extraAttrs, placeholder, displayValue, isoValue){ return '<div class="date-entry"><input class="field-input date-text" type="text" data-date-text="1" placeholder="'+(placeholder||DATE_PLACEHOLDER)+'" value="'+esc(displayValue||'')+('"'+extraAttrs)+'><input class="date-native" type="date" data-date-picker="1" value="'+esc(isoValue||'')+'"></div>'; }
       // Rows are grouped exactly how the printed logbook is grouped: one section
@@ -425,10 +461,63 @@
       function groupRows(list){ var map={}; for(var i=0;i<list.length;i++){ var row=list[i],key=aircraftLabel(row)+'||'+s(row['Chapter']); if(!map[key]) map[key]={type:aircraftLabel(row),chapter:s(row['Chapter']),chapterDesc:s(row['Chapter Description']),rows:[]}; map[key].rows.push(row); } var out=[]; for(var k in map){ if(Object.prototype.hasOwnProperty.call(map,k)) out.push(map[k]); } out.sort(function(a,b){ if(a.type===b.type) return a.chapter.localeCompare(b.chapter,undefined,{numeric:true}); return a.type.localeCompare(b.type); }); return out; }
       // Each task consumes one or more vertical "slots" on a page, so pagination is
       // based on rendered space rather than raw row count.
-      function paginate(list){ var sorted=list.slice(); sorted.sort(function(a,b){ var da=parseDate(a['Date']),db=parseDate(b['Date']); if(da!==db) return da-db; return (Number(a.__rowId)||0)-(Number(b.__rowId)||0); }); var out=[],page=[],used=0; for(var i=0;i<sorted.length;i++){ var row=sorted[i],u=unitsFor(row); if(page.length&&used+u>PAGE_SLOTS){ out.push(page); page=[]; used=0; } page.push({row:row,units:u}); used+=u; } if(page.length) out.push(page); return out; }
+      function paginate(list){
+        function sortByDate(a,b){ var da=parseDate(a['Date']),db=parseDate(b['Date']); if(da!==db) return da-db; return (Number(a.__rowId)||0)-(Number(b.__rowId)||0); }
+        function nextSlotFit(start, units){ var offset=start%PAGE_SLOTS; if(offset&&offset+units>PAGE_SLOTS) return start+(PAGE_SLOTS-offset); return start; }
+        var signed=[],unsigned=[],placed=[],cursor=0,unsignedIndex=0,pages=[];
+        for(var i=0;i<list.length;i++){
+          var entry={row:list[i],units:unitsFor(list[i]),signed:isRowSigned(list[i]),signedSlot:signedSlotFor(list[i])};
+          if(entry.signed) signed.push(entry);
+          else unsigned.push(entry);
+        }
+        signed.sort(function(a,b){ if(a.signedSlot!==b.signedSlot) return a.signedSlot-b.signedSlot; return (Number(a.row.__rowId)||0)-(Number(b.row.__rowId)||0); });
+        unsigned.sort(function(a,b){ return sortByDate(a.row,b.row); });
+        function placeUnsignedUntil(target){
+          while(unsignedIndex<unsigned.length){
+            var next=unsigned[unsignedIndex],start=nextSlotFit(cursor,next.units);
+            if(start+next.units>target) break;
+            cursor=start;
+            placed.push({row:next.row,units:next.units,slotStart:cursor});
+            cursor+=next.units;
+            unsignedIndex++;
+          }
+          if(cursor<target) cursor=target;
+        }
+        for(var j=0;j<signed.length;j++){
+          var signedEntry=signed[j],target=signedEntry.signedSlot>=0?signedEntry.signedSlot:cursor,startSlot;
+          placeUnsignedUntil(target);
+          startSlot=nextSlotFit(Math.max(cursor,target),signedEntry.units);
+          placed.push({row:signedEntry.row,units:signedEntry.units,slotStart:startSlot,signed:true});
+          cursor=startSlot+signedEntry.units;
+        }
+        while(unsignedIndex<unsigned.length){
+          var freeEntry=unsigned[unsignedIndex++];
+          cursor=nextSlotFit(cursor,freeEntry.units);
+          placed.push({row:freeEntry.row,units:freeEntry.units,slotStart:cursor});
+          cursor+=freeEntry.units;
+        }
+        for(var k=0;k<placed.length;k++){
+          var pageIndex=Math.floor(placed[k].slotStart/PAGE_SLOTS);
+          placed[k].pageSlotStart=placed[k].slotStart%PAGE_SLOTS;
+          if(!pages[pageIndex]) pages[pageIndex]=[];
+          pages[pageIndex].push(placed[k]);
+        }
+        return pages.filter(Boolean);
+      }
       function blankEditableCell(field, type, chapter, chapterDesc, regListId){ var common=' data-new-row="1" data-edit-field="'+field+'" data-new-type="'+esc(type)+'" data-new-chapter="'+esc(chapter)+'" data-new-chapter-desc="'+esc(chapterDesc||'')+'"'; if(field==='Date') return dateControlHtml(common,DATE_PLACEHOLDER); if(field==='A/C Reg') return '<input class="field-input" type="text" list="'+esc(regListId||'aircraft-reg-list')+'" placeholder="G-XXXX"'+common+'>'; if(field==='Job No') return '<input class="field-input" type="text" placeholder="Job No"'+common+'>'; if(field==='Task Detail'||field==='Rewriten for cap741') return '<div class="editable-cell task-input" contenteditable="true"'+common+'></div>'; return '<div class="editable-cell" contenteditable="true"'+common+'></div>'; }
-      function blankSupervisorCell(type, chapter, chapterDesc){ return '<div class="sup"><span class="star">*</span><input class="field-input name" type="text" list="supervisor-list" placeholder="Supervisor" data-new-row="1" data-edit-field="Approval Name" data-new-type="'+esc(type)+'" data-new-chapter="'+esc(chapter)+'" data-new-chapter-desc="'+esc(chapterDesc||'')+'"><input class="field-input licence" type="text" placeholder="Licence number" data-new-row="1" data-edit-field="Aprroval Licence No." data-new-type="'+esc(type)+'" data-new-chapter="'+esc(chapter)+'" data-new-chapter-desc="'+esc(chapterDesc||'')+'">'+clearSupervisorButtonHtml()+'</div>'; }
-      function makeRows(items, group){ var html='',consumed=0,regListId=aircraftRegListIdForGroup(group); for(var i=0;i<items.length;i++){ var item=items[i]; consumed+=item.units; html+='<tr class="slot'+(item.units>1?' merged-slot':'')+'" data-row-key="row-'+item.row.__rowId+'" style="height:calc(var(--slot-h) * '+item.units+')"><td class="c-date">'+dateControlHtml(' data-row-id="'+item.row.__rowId+'" data-edit-field="Date"',DATE_PLACEHOLDER,formatDateDisplay(item.row['Date']),toIsoInputDate(item.row['Date']))+'</td><td class="c-reg">'+editableTextInput('A/C Reg',item.row.__rowId,item.row['A/C Reg'],'G-XXXX','',regListId)+'</td><td class="c-job">'+editableTextInput('Job No',item.row.__rowId,item.row['Job No'],'Job No')+'</td><td class="c-task">'+taskCellHtml(item.row)+'</td><td class="c-sup">'+editableSupervisorCell(item.row)+'</td></tr>'; } for(var j=consumed;j<PAGE_SLOTS;j++) html+='<tr class="slot"><td class="c-date">'+blankEditableCell('Date',group.type,group.chapter,group.chapterDesc,regListId)+'</td><td class="c-reg">'+blankEditableCell('A/C Reg',group.type,group.chapter,group.chapterDesc,regListId)+'</td><td class="c-job">'+blankEditableCell('Job No',group.type,group.chapter,group.chapterDesc,regListId)+'</td><td class="c-task">'+blankTaskCellHtml(group.type,group.chapter,group.chapterDesc,regListId)+'</td><td class="c-sup">'+blankSupervisorCell(group.type,group.chapter,group.chapterDesc)+'</td></tr>'; return html; }
+      function blankSupervisorCell(type, chapter, chapterDesc){ return '<div class="sup"><span class="star">*</span><input class="field-input name" type="text" list="supervisor-list" placeholder="Supervisor" data-new-row="1" data-edit-field="Approval Name" data-new-type="'+esc(type)+'" data-new-chapter="'+esc(chapter)+'" data-new-chapter-desc="'+esc(chapterDesc||'')+'"><input class="field-input licence" type="text" placeholder="Licence number" data-new-row="1" data-edit-field="Aprroval Licence No." data-new-type="'+esc(type)+'" data-new-chapter="'+esc(chapter)+'" data-new-chapter-desc="'+esc(chapterDesc||'')+'"></div>'; }
+      function makeBlankSlot(group, regListId){ return '<tr class="slot"><td class="c-date">'+blankEditableCell('Date',group.type,group.chapter,group.chapterDesc,regListId)+'</td><td class="c-reg">'+blankEditableCell('A/C Reg',group.type,group.chapter,group.chapterDesc,regListId)+'</td><td class="c-job">'+blankEditableCell('Job No',group.type,group.chapter,group.chapterDesc,regListId)+'</td><td class="c-task">'+blankTaskCellHtml(group.type,group.chapter,group.chapterDesc,regListId)+'</td><td class="c-sup">'+blankSupervisorCell(group.type,group.chapter,group.chapterDesc)+'</td></tr>'; }
+      function makeRows(items, group){
+        var html='',consumed=0,regListId=aircraftRegListIdForGroup(group);
+        for(var i=0;i<items.length;i++){
+          var item=items[i],row=item.row,signed=isRowSigned(row);
+          while(consumed<item.pageSlotStart){ html+=makeBlankSlot(group,regListId); consumed++; }
+          html+='<tr class="slot'+(item.units>1?' merged-slot':'')+(signed?' signed-row':'')+'" data-row-key="row-'+row.__rowId+'" data-slot-start="'+item.slotStart+'" style="height:calc(var(--slot-h) * '+item.units+')"><td class="c-date">'+dateCellHtml(row)+'</td><td class="c-reg">'+(signed?staticTextCell(row['A/C Reg'],'locked-cell'):editableTextInput('A/C Reg',row.__rowId,row['A/C Reg'],'G-XXXX','',regListId))+'</td><td class="c-job">'+(signed?staticTextCell(row['Job No'],'locked-cell'):editableTextInput('Job No',row.__rowId,row['Job No'],'Job No'))+'</td><td class="c-task">'+taskCellHtml(row)+'</td><td class="c-sup">'+editableSupervisorCell(row)+'</td></tr>';
+          consumed=item.pageSlotStart+item.units;
+        }
+        for(var j=consumed;j<PAGE_SLOTS;j++) html+=makeBlankSlot(group,regListId);
+        return html;
+      }
       function renderDeclaration(){ return '<tfoot><tr class="declaration-row"><td colspan="5"><div class="declaration"><div class="declaration-star">*</div><div class="declaration-text">The above work has been carried out correctly by the logbook owner under my supervision and in accordance with the<br>appropriate technical documentation.</div></div></td></tr></tfoot>'; }
       function renderPage(type, chapter, rowsHtml, owner, sign){ return '<section class="page"><div class="headrow"><div>CAP 741</div><div>Aircraft Maintenance Engineer\'s Logbook</div></div><div class="topline"></div><div class="title">Section 3.1&nbsp;&nbsp; Maintenance Experience</div><div class="dots-row"><div class="field-stack"><div class="dots-field"><span class="dots-label">Aircraft Type:</span><span class="dots-line">'+type+'</span></div><div class="subnote">(Aircraft/Engine combination)</div></div><div class="field-stack top-pad"><div class="dots-field"><span class="dots-label">ATA Chapter:</span><span class="dots-line">'+chapter+'</span></div></div></div><div class="frame"><table class="sheet"><thead><tr><th class="c-date">Date</th><th class="c-reg">A/C Reg</th><th class="c-job">Job No</th><th class="c-task">Task Detail</th><th class="c-sup">Supervisor&rsquo;s Name Signature,<br>and Licence Number</th></tr></thead><tbody>'+rowsHtml+'</tbody>'+renderDeclaration()+'</table></div><div class="owner-row"><div class="dots-field"><span class="dots-label">Logbook Owner\'s Name:</span><span class="dots-line"><span>'+owner+'</span></span></div><div class="dots-field"><span class="dots-label">Signature:</span><span class="dots-line"><span>'+sign+'</span></span></div></div><div style="margin-top:18px" class="bottomline"></div><div class="footer-id">Section 3.1</div></section>'; }
       function renderEditablePage(group, rowsHtml, owner, sign, pageKey){ return '<section class="page" data-group-key="'+esc(group.type+'||'+group.chapter)+'" data-page-key="'+esc(pageKey||'')+'">'+groupAircraftRegDatalistHtml(group)+'<div class="headrow"><div>CAP 741</div><div>Aircraft Maintenance Engineer\'s Logbook</div></div><div class="topline"></div><div class="title">Section 3.1&nbsp;&nbsp; Maintenance Experience</div><div class="dots-row"><div class="field-stack"><div class="dots-field"><span class="dots-label">Aircraft Type:</span><span class="dots-line editable-dots-line">'+renderDotsInput(group.type,' data-group-field="Aircraft Type" list="aircraft-type-list"')+'</span></div><div class="subnote">(Aircraft/Engine combination)</div></div><div class="field-stack top-pad"><div class="dots-field"><span class="dots-label">ATA Chapter:</span><span class="dots-line editable-dots-line">'+renderDotsInput(group.chapter+(group.chapterDesc?' - '+group.chapterDesc:''),' data-group-field="Chapter" list="chapter-list"')+'</span></div></div></div><div class="frame"><table class="sheet"><thead><tr><th class="c-date">Date</th><th class="c-reg">A/C Reg</th><th class="c-job">Job No</th><th class="c-task">Task Detail</th><th class="c-sup">Supervisor&rsquo;s Name, Signature<br>and Licence Number</th></tr></thead><tbody>'+rowsHtml+'</tbody>'+renderDeclaration()+'</table></div><div class="owner-row"><div class="dots-field"><span class="dots-label">Logbook Owner\'s Name:</span><span class="dots-line"><span>'+owner+'</span></span></div><div class="dots-field"><span class="dots-label">Signature:</span><span class="dots-line"><span>'+sign+'</span></span></div></div><div style="margin-top:18px" class="bottomline"></div><div class="footer-id">Section 3.1</div></section>'; }
@@ -534,6 +623,21 @@
         for(var j=0;j<editableCells.length;j++) editableCells[j].innerHTML='&nbsp;';
         var datePickers=tr.querySelectorAll('.date-native');
         for(var k=0;k<datePickers.length;k++) datePickers[k].value='';
+      }
+      function rowSlotStartFromButton(button){ var tr=button&&button.closest?button.closest('tr'):null,slot=Number(tr&&tr.getAttribute('data-slot-start')); return isFinite(slot)&&slot>=0?slot:-1; }
+      function toggleSignedRow(button){
+        var rowId=button&&button.getAttribute?button.getAttribute('data-row-id'):'',row=rowId?rowById(rowId):null;
+        if(!row) return;
+        if(isRowSigned(row)){
+          setRowSignedState(row,false,-1);
+        } else {
+          if(!rowHasEntryContent(row)) { fail('Add row details before marking it as signed.'); return; }
+          if(!s(row['Approval Name'])) { fail('Set supervisor details before marking the row as signed.'); return; }
+          setRowSignedState(row,true,rowSlotStartFromButton(button));
+        }
+        refreshUnsavedChangesState();
+        renderAllWithMotion();
+        scheduleAutoSave();
       }
       function openTaskDetailFromButton(button){
         var rowId=button&&button.getAttribute&&button.getAttribute('data-row-id');
@@ -828,6 +932,7 @@
           for(var i=0;i<logRows.length;i++){
             var row={};
             for(var j=0;j<LOG_HEADERS.length;j++) row[LOG_HEADERS[j]]=s(logRows[i][LOG_HEADERS[j]]);
+            row.__signedSlot=(function(value){ var slot=parseInt(s(value),10); return isFinite(slot)&&slot>=0?slot:-1; })(logRows[i]['Signed Slot']);
             parsed.push(normalizeLoadedRow(row));
           }
           rows=normalizeRows(parsed);
@@ -836,6 +941,7 @@
         }
         applyAircraftGroupRows((sheetObjects.Aircraft||[]).map(function(r){ return {group:r.Group,reg:r['A/C Reg'],type:r['Aircraft Type']}; }));
         syncAllRowAircraftTypes();
+        initializeSignedSlots(rows);
         applyChapterRows((sheetObjects.Chapters||[]).map(function(r){ return {chapter:r.Chapter,description:r.Description}; }));
         rebuildSupervisorState((sheetObjects.Supervisors||[]).map(function(r){ return {id:r.ID,name:r['Signatory Name'],stamp:r.Stamp,licence:r['License Number'],scope:r['Scope / Limitations'],date:r.Date}; }));
         LOG_OWNER_INFO={ name:'', signature:'', stamp:'' };
@@ -1329,6 +1435,8 @@
         if(ev.target&&ev.target.closest&&ev.target.closest('[data-clear-search="1"]')){ clearSearch(); return; }
         if(ev.target&&ev.target.closest&&ev.target.closest('[data-clear-all-results="1"]')){ clearFilters(); clearSearch(); return; }
         if(ev.target&&ev.target.closest&&ev.target.closest('[data-clear-filters="1"]')){ clearFilters(); return; }
+        var signToggleBtn=ev.target.closest&&ev.target.closest('[data-toggle-signed]');
+        if(signToggleBtn){ toggleSignedRow(signToggleBtn); return; }
         var clearSupervisorBtn=ev.target.closest&&ev.target.closest('[data-clear-supervisor]');
         if(clearSupervisorBtn){ clearSupervisorFields(clearSupervisorBtn); return; }
         var taskExpandBtn=ev.target.closest&&ev.target.closest('[data-open-task], [data-open-task-new]');
@@ -1351,7 +1459,7 @@
         var taskCell=td.querySelector('.editable-cell.task-input');
         if(taskCell&&ev.target!==taskCell&&!ev.target.closest('input')){ taskCell.focus(); var sel=window.getSelection&&window.getSelection(); if(sel&&document.createRange){ var range=document.createRange(); range.selectNodeContents(taskCell); range.collapse(false); sel.removeAllRanges(); sel.addRange(range); } }
       });
-      pagesEl.addEventListener('mousedown',function(ev){ var actionBtn=ev.target.closest&&ev.target.closest('[data-open-task], [data-open-task-new], [data-clear-supervisor]'); if(actionBtn) ev.preventDefault(); });
+      pagesEl.addEventListener('mousedown',function(ev){ var actionBtn=ev.target.closest&&ev.target.closest('[data-open-task], [data-open-task-new], [data-clear-supervisor], [data-toggle-signed]'); if(actionBtn) ev.preventDefault(); });
       pagesEl.addEventListener('change',function(ev){
         var datePicker=ev.target.closest&&ev.target.closest('[data-date-picker]');
         if(datePicker){ var dateEntry=datePicker.closest('.date-entry'); syncDateControl(dateEntry,datePicker.value); var dateInput=dateEntry&&dateEntry.querySelector('[data-date-text]'); if(dateInput&&updateRowFromEditor(dateInput)) syncSaveButtonState(false); }
