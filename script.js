@@ -660,7 +660,7 @@
       function closeInfoModal(){ if(infoModal) infoModal.className='modal-backdrop'; }
       function taskDetailStateFromRow(row){ return { chapter:s(row['Chapter']), chapterDesc:s(row['Chapter Description']), fault:s(row['FAULT']), task:s(row['Task Detail']), rewrite:s(row['Rewriten for cap741']) }; }
       function restoreTaskDetailState(row, state){ if(!row||!state) return; row['Chapter']=state.chapter; row['Chapter Description']=state.chapterDesc; row['FAULT']=state.fault; row['Task Detail']=state.task; row['Rewriten for cap741']=state.rewrite; }
-      function previewTaskDetailForm(){ var row=rowById(lastTaskDetailRowId); if(!row) return; applyTaskDetailForm(row,readTaskDetailForm()); renderAll(); }
+      function previewTaskDetailForm(){ var row=rowById(lastTaskDetailRowId); if(!row) return; applyTaskDetailForm(row,readTaskDetailForm()); refreshUnsavedChangesState(); }
       function openTaskDetail(rowId){ lastTaskDetailFocus=document.activeElement&&pagesEl.contains(document.activeElement)?document.activeElement:null; captureActiveEditorState(); var row=rowById(rowId); if(!row) return; lastTaskDetailRowId=rowId; taskDetailOriginalState=taskDetailStateFromRow(row); taskDetailRewriteDirty=false; detailChapterEl.value=chapterLabelText(row); detailFaultEl.value=s(row['FAULT']); detailTaskEl.value=s(row['Task Detail']); detailRewriteEl.value=s(row['Rewriten for cap741']||row['Task Detail']); taskDetailModal.className='modal-backdrop open'; if(typeof requestAnimationFrame==='function') requestAnimationFrame(autoSizeDetailTextareas); else autoSizeDetailTextareas(); }
       function showConfirmDialog(title, text, okLabel){ return new Promise(function(resolve){ confirmResolver=resolve; if(confirmTitleEl) confirmTitleEl.textContent=title||'Confirm'; if(confirmTextEl) confirmTextEl.textContent=text||'Are you sure?'; if(confirmOkBtn) confirmOkBtn.textContent=okLabel||'Confirm'; if(confirmModal) confirmModal.className='modal-backdrop open'; }); }
       function closeConfirmDialog(result){ if(confirmModal) confirmModal.className='modal-backdrop'; if(confirmResolver){ var resolve=confirmResolver; confirmResolver=null; resolve(!!result); } }
@@ -1101,7 +1101,7 @@
       }
 
       // ---- Auto-save after chapter/data changes ----
-      function scheduleAutoSave(){ clearTimeout(autoSaveTimer); autoSaveTimer=setTimeout(async function(){ if(!hasUnsavedChanges) return; try { await saveActiveStorage(false); refreshUnsavedChangesState(); } catch(e){ /* silently fail - save button still available */ } },1500); }
+      function scheduleAutoSave(){ clearTimeout(autoSaveTimer); refreshUnsavedChangesState(); }
 
       // ---- Flush / save ----
       async function flushLinkedRewrite(force){ if(!hasUnsavedChanges&&!force) return; captureActiveEditorState(); if(saveInFlight){ saveQueued=true; return; } saveInFlight=true; syncSaveButtonState(true); try { clearFail(); await saveActiveStorage(!!force); refreshUnsavedChangesState(); } catch(e){ if(e&&e.name==='AbortError') fail('Save cancelled. Choose the storage source again and try saving once more.'); else fail(saveFailureMessage(e)); } finally { saveInFlight=false; syncSaveButtonState(false); if(saveQueued){ saveQueued=false; flushLinkedRewrite(true); } } }
@@ -1494,9 +1494,6 @@
         if(!cell) return;
         if(ev.target.matches&&ev.target.matches('[data-group-field]')) return;
         updateRowFromEditor(cell);
-        if(fieldNeedsLiveLayoutRefresh(cell.getAttribute('data-edit-field'))){
-          scheduleLiveLayoutRefresh(captureEditorSnapshot(ev.target),40);
-        }
       });
       pagesEl.addEventListener('blur',function(ev){
         var cell=ev.target.closest&&(ev.target.closest('.editable-cell')||ev.target.closest('[data-row-id]')||ev.target.closest('[data-new-row]'));
