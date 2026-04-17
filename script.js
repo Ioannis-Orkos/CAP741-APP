@@ -208,6 +208,10 @@
       function chapterLabelText(row){ var chapter=s(row['Chapter']),desc=s(row['Chapter Description']); return desc?chapter+' - '+desc:chapter; }
       function fieldAffectsRowLayout(field){ return field==='Task Detail'||field==='Rewriten for cap741'||field==='Approval Name'||field==='Aprroval Licence No.'; }
       function fieldNeedsLiveLayoutRefresh(field){ return field==='Task Detail'||field==='Rewriten for cap741'||field==='Approval Name'||field==='Aprroval Licence No.'; }
+      function liveLayoutUnitsForField(row, field){
+        if(!row||!(field==='Task Detail'||field==='Rewriten for cap741')) return 0;
+        return unitsFor(row);
+      }
       function captureContentEditableSelection(root){ var sel=window.getSelection&&window.getSelection(); if(!sel||!sel.rangeCount) return {start:0,end:0}; var range=sel.getRangeAt(0); if(!root.contains(range.startContainer)||!root.contains(range.endContainer)) return {start:0,end:0}; var startRange=document.createRange(); startRange.selectNodeContents(root); startRange.setEnd(range.startContainer,range.startOffset); var endRange=document.createRange(); endRange.selectNodeContents(root); endRange.setEnd(range.endContainer,range.endOffset); return {start:startRange.toString().length,end:endRange.toString().length}; }
       function setContentEditableSelection(root, start, end){ var walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,null); var node,pos=0,startNode=null,endNode=null,startOffset=0,endOffset=0; while((node=walker.nextNode())){ var next=pos+node.nodeValue.length; if(startNode==null&&start<=next){ startNode=node; startOffset=Math.max(0,start-pos); } if(endNode==null&&end<=next){ endNode=node; endOffset=Math.max(0,end-pos); break; } pos=next; } var range=document.createRange(); if(startNode&&endNode){ range.setStart(startNode,startOffset); range.setEnd(endNode,endOffset); } else { range.selectNodeContents(root); range.collapse(false); } var sel=window.getSelection&&window.getSelection(); if(sel){ sel.removeAllRanges(); sel.addRange(range); } }
       function captureEditorSnapshot(target){ var el=target&&target.closest?(target.closest('.editable-cell')||target.closest('input.field-input[data-edit-field], input.field-input[data-new-row]')):null; if(!el) return null; var field=el.getAttribute('data-edit-field'),rowId=el.getAttribute('data-row-id'); if(!field||rowId==null) return null; var snapshot={field:field,rowId:rowId,isInput:el.tagName==='INPUT',scrollX:window.scrollX,scrollY:window.scrollY}; if(snapshot.isInput){ snapshot.start=typeof el.selectionStart==='number'?el.selectionStart:null; snapshot.end=typeof el.selectionEnd==='number'?el.selectionEnd:snapshot.start; } else { var selection=captureContentEditableSelection(el); snapshot.start=selection.start; snapshot.end=selection.end; } return snapshot; }
@@ -1497,7 +1501,13 @@
         var cell=ev.target.closest&&(ev.target.closest('.editable-cell')||ev.target.closest('[data-row-id]')||ev.target.closest('[data-new-row]'));
         if(!cell) return;
         if(ev.target.matches&&ev.target.matches('[data-group-field]')) return;
-        updateRowFromEditor(cell);
+        var field=cell.getAttribute('data-edit-field');
+        var existingRow=rowById(cell.getAttribute('data-row-id'));
+        var unitsBefore=liveLayoutUnitsForField(existingRow,field);
+        var row=updateRowFromEditor(cell);
+        if(fieldNeedsLiveLayoutRefresh(field)&&liveLayoutUnitsForField(row,field)!==unitsBefore){
+          scheduleLiveLayoutRefresh(captureEditorSnapshot(ev.target),140);
+        }
       });
       pagesEl.addEventListener('blur',function(ev){
         var cell=ev.target.closest&&(ev.target.closest('.editable-cell')||ev.target.closest('[data-row-id]')||ev.target.closest('[data-new-row]'));
