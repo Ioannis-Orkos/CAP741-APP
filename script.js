@@ -436,9 +436,13 @@
       function editableTextInput(field, rowId, value, placeholder, extraClass, listId){ return '<input class="field-input '+(extraClass||'')+'" type="text"'+(listId?' list="'+listId+'"':'')+' data-row-id="'+rowId+'" data-edit-field="'+field+'" value="'+esc(value||'')+'"'+(placeholder?' placeholder="'+esc(placeholder)+'"':'')+'>';}
       function editableCell(field, rowId, value, cls){ return '<div class="editable-cell '+(cls||'')+'" contenteditable="true" data-row-id="'+rowId+'" data-edit-field="'+field+'">'+(esc(value)||'&nbsp;')+'</div>'; }
       function staticTextCell(value, cls){ return '<div class="'+(cls||'locked-cell')+'">'+(esc(value)||'&nbsp;')+'</div>'; }
+      function rowLockIconSvg(signed){
+        if(signed) return '<svg viewBox="0 0 24 24" class="row-lock-icon" aria-hidden="true" focusable="false"><path d="M7 10V8a5 5 0 1 1 10 0v2h1a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h1Zm2 0h6V8a3 3 0 1 0-6 0v2Z" fill="currentColor"/></svg>';
+        return '<svg viewBox="0 0 24 24" class="row-lock-icon" aria-hidden="true" focusable="false"><path d="M17 10h1a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h8V8a2 2 0 1 0-4 0v1H8V8a4 4 0 1 1 8 0v2Zm1 2H6v7h12v-7Z" fill="currentColor"/></svg>';
+      }
       function signToggleButtonHtml(row){
         var signed=isRowSigned(row);
-        return '<button class="row-lock'+(signed?' is-signed':'')+'" type="button" data-toggle-signed="1" data-row-id="'+row.__rowId+'" aria-label="'+(signed?'Unlock signed row':'Lock and sign row')+'" title="'+(signed?'Unlock row':'Lock row')+'"><span class="row-lock-icon" aria-hidden="true">'+(signed?'&#128274;':'&#128275;')+'</span></button>';
+        return '<button class="row-lock'+(signed?' is-signed':'')+'" type="button" data-toggle-signed="1" data-row-id="'+row.__rowId+'" aria-label="'+(signed?'Unlock signed row':'Lock and sign row')+'" title="'+(signed?'Unlock row':'Lock row')+'">'+rowLockIconSvg(signed)+'</button>';
       }
       function clearRowButtonHtml(row){
         return '<button class="sup-clear" type="button" data-clear-supervisor="1" data-row-id="'+row.__rowId+'" aria-label="Clear row" title="Clear row">Clear</button>';

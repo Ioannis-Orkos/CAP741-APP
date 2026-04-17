@@ -92,8 +92,8 @@
     .date-cell-wrap { display:block; min-height:1.2em; }
     .date-cell-wrap .date-entry,
     .date-cell-wrap .locked-cell { display:block; width:100%; }
-    .row-lock { position:absolute; top:50%; left:-7px; transform:translate(-100%, -50%); width:19px; height:19px; padding:0; border:1px solid #b7c0c8; border-radius:5px; background:#e7edf2; color:#5c6973; cursor:pointer; text-align:center; box-shadow:0 1px 2px rgba(23,55,74,.08); z-index:2; }
-    .row-lock-icon { display:block; font-size:13px; line-height:17px; }
+    .row-lock { position:absolute; top:50%; left:-8px; transform:translate(-100%, -50%); width:23px; height:23px; padding:0; border:1px solid #b7c0c8; border-radius:6px; background:#e7edf2; color:#5c6973; cursor:pointer; text-align:center; box-shadow:0 1px 2px rgba(23,55,74,.08); z-index:2; }
+    .row-lock-icon { display:block; width:15px; height:15px; margin:3px auto 0; }
     .row-lock:hover { background:#eef3f6; border-color:#aab5be; color:#4d5a64; }
     .row-lock.is-signed { border-color:#8d99a3; background:#c6d0d7; color:#31424f; }
     .row-lock.is-signed:hover { background:#bec8d0; border-color:#7e8a95; color:#273844; }
