@@ -168,6 +168,11 @@
     .cap741-overlay-close:hover { background:#eef3f6; }
     .cap741-overlay-title { margin:0 34px 5px 0; font-size:17px; font-weight:700; color:#102836; }
     .cap741-overlay-copy { margin:0 0 10px; max-width:640px; font-size:11px; line-height:1.45; color:#52697a; }
+    .other-overlay-print-start { display:flex; align-items:center; gap:8px; width:min(100%, 760px); margin:10px auto 0; color:#435c6d; font-size:11px; }
+    .other-overlay-print-start-label { font-weight:700; color:#17374a; }
+    .other-overlay-print-start-value { width:48px; height:30px; padding:0 8px; border:1px solid #c7d3dc; border-radius:8px; background:#fff; text-align:center; font:700 12px/1 Arial, Helvetica, sans-serif; color:#17374a; box-shadow:0 1px 4px rgba(17,17,17,.05); }
+    .other-overlay-print-start-value:focus { outline:none; border-color:#17374a; box-shadow:0 0 0 2px rgba(23,55,74,.12), 0 1px 4px rgba(17,17,17,.05); }
+    .other-overlay-print-start-copy { line-height:1.4; }
     .cap741-overlay-preview { --preview-frame-top:25%; --preview-frame-left:7%; --preview-frame-width:85%; --preview-header-height:7.5%; --preview-row-height:8%; --preview-date-width:12%; --preview-reg-width:12%; --preview-job-width:9%; --preview-task-width:41%; --preview-sup-width:26%; }
     .cap741-overlay-sketch-shell { position:relative; width:min(100%, 760px); min-height:372px; margin:0 auto; padding:18px 18px 20px; background:linear-gradient(180deg, #f8fafc 0%, #f3f6f8 100%); border:1px solid #d7dee5; border-radius:16px; overflow:hidden; }
     .other-overlay-sketch-shell { min-height:250px; }
@@ -384,6 +389,8 @@
     @media (max-width: 480px) {
       .cap741-overlay-card { width:calc(100vw - 16px); padding:16px 14px 14px; }
       .cap741-overlay-copy { font-size:10px; }
+      .other-overlay-print-start { gap:6px; flex-wrap:wrap; font-size:10px; }
+      .other-overlay-print-start-value { width:44px; height:28px; font-size:11px; }
       .cap741-overlay-sketch-shell { min-height:286px; padding:14px 12px 16px; }
       .other-overlay-sketch-shell { min-height:250px; }
       .other-overlay-window { height:296px; }

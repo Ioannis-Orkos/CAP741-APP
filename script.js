@@ -54,7 +54,7 @@
       var NEW_WORKBOOK_SUPERVISOR_LICENCE = 'UK.XX.XXXXXXX';
       var NEW_WORKBOOK_TASK_TEXT = 'Dummy data test one';
       var NEW_WORKBOOK_OWNER_NAME = 'User User';
-      var OTHER_LAYOUT_DEFAULTS = { top: 37, headerHeight: 11, left: 14.5, dateStart: 14.5, regStart: 31, jobStart: 52, taskStart: 68, superStart: 142, end: 193, rowHeight: 13, textTop: 1, textLeft: 1 };
+      var OTHER_LAYOUT_DEFAULTS = { top: 37, headerHeight: 11, left: 14.5, dateStart: 14.5, regStart: 31, jobStart: 52, taskStart: 68, superStart: 142, end: 193, rowHeight: 13, textTop: 1, textLeft: 1, startBox: 1 };
 
       // ---- DOM refs ----
       var errorBox = document.getElementById('errorBox');
@@ -116,6 +116,7 @@
       var otherOverlayRowMeasureValueEl = document.getElementById('otherOverlayRowMeasureValue');
       var otherOverlayTaskMeasureValueEl = document.getElementById('otherOverlayTaskMeasureValue');
       var otherOverlayTaskWidthMeasureValueEl = document.getElementById('otherOverlayTaskWidthMeasureValue');
+      var otherOverlayStartBoxValueEl = document.getElementById('otherOverlayStartBoxValue');
       var otherOverlayDateMeasureValueEl = document.getElementById('otherOverlayDateMeasureValue');
       var otherOverlayRegMeasureValueEl = document.getElementById('otherOverlayRegMeasureValue');
       var otherOverlayJobMeasureValueEl = document.getElementById('otherOverlayJobMeasureValue');
@@ -251,7 +252,8 @@
           end:Number(source.end)||0,
           rowHeight:Number(source.rowHeight)||0,
           textTop:Number(source.textTop)||0,
-          textLeft:Number(source.textLeft)||0
+          textLeft:Number(source.textLeft)||0,
+          startBox:(function(value){ value=parseInt(value,10); return isFinite(value)&&value>0?Math.min(PAGE_SLOTS,value):1; })(source.startBox)
         };
       }
       function writeMeasurementCssVars(prefix, measurements, target){
@@ -286,6 +288,11 @@
         if(otherOverlayRowMeasureValueEl){
           if(document.activeElement!==otherOverlayRowMeasureValueEl){
             otherOverlayRowMeasureValueEl.value=String(Number((measurements.rowHeight||0).toFixed(1)));
+          }
+        }
+        if(otherOverlayStartBoxValueEl){
+          if(document.activeElement!==otherOverlayStartBoxValueEl){
+            otherOverlayStartBoxValueEl.value=String(measurements.startBox||1);
           }
         }
         if(otherOverlayTaskMeasureValueEl){
@@ -382,7 +389,8 @@
           end:readOtherLayoutMeasurementInput(otherLayoutEndEl,otherLayoutMeasurements.end),
           rowHeight:readOtherLayoutMeasurementInput(otherLayoutRowHeightEl,otherLayoutMeasurements.rowHeight),
           textTop:readOtherLayoutMeasurementInput(otherLayoutTextTopEl,otherLayoutMeasurements.textTop),
-          textLeft:readOtherLayoutMeasurementInput(otherLayoutTextLeftEl,otherLayoutMeasurements.textLeft)
+          textLeft:readOtherLayoutMeasurementInput(otherLayoutTextLeftEl,otherLayoutMeasurements.textLeft),
+          startBox:(function(value){ value=parseInt(value,10); return isFinite(value)&&value>0?Math.min(PAGE_SLOTS,value):(otherLayoutMeasurements.startBox||1); })(otherOverlayStartBoxValueEl&&otherOverlayStartBoxValueEl.value)
         };
       }
       function readOtherLayoutModalValues(){
@@ -820,7 +828,7 @@
       function clearPrintSelection(){ var pages=pageElements(); document.body.classList.remove('print-current','print-current-overlay','print-current-other-layout'); for(var i=0;i<pages.length;i++) pages[i].classList.remove('print-exclude'); printMode=''; }
       function printCurrentPage(){ var current=currentVisiblePage(),pages=pageElements(); clearPrintSelection(); if(!current||!pages.length){ window.print(); return; } document.body.classList.add('print-current'); for(var i=0;i<pages.length;i++){ if(pages[i]!==current) pages[i].classList.add('print-exclude'); } printMode='current'; window.print(); }
       function printCurrentPageOverlay(){ var current=currentVisiblePage(),pages=pageElements(); clearPrintSelection(); if(!current||!pages.length){ window.print(); return; } document.body.classList.add('print-current-overlay'); for(var i=0;i<pages.length;i++){ if(pages[i]!==current) pages[i].classList.add('print-exclude'); } printMode='current-overlay'; window.print(); }
-      function printCurrentOtherLayout(){ var current=currentVisiblePage(),pages=pageElements(); clearPrintSelection(); if(!current||!pages.length){ window.print(); return; } writeMeasurementCssVars('--other-layout',otherLayoutMeasurements); document.body.classList.add('print-current-other-layout'); for(var i=0;i<pages.length;i++){ if(pages[i]!==current) pages[i].classList.add('print-exclude'); } printMode='current-other-layout'; window.print(); }
+      function printCurrentOtherLayout(){ var current=currentVisiblePage(),pages=pageElements(); clearPrintSelection(); if(!current||!pages.length){ window.print(); return; } var printMeasurements=cloneMeasurementState(otherLayoutMeasurements); printMeasurements.top += Math.max(0,(printMeasurements.startBox||1)-1) * printMeasurements.rowHeight; writeMeasurementCssVars('--other-layout',printMeasurements); document.body.classList.add('print-current-other-layout'); for(var i=0;i<pages.length;i++){ if(pages[i]!==current) pages[i].classList.add('print-exclude'); } printMode='current-other-layout'; window.print(); }
       function printAllPages(){ clearPrintSelection(); printMode='all'; window.print(); }
       function confirmOtherLayoutPrint(){ otherLayoutMeasurements=readOtherLayoutModalValues(); closeOtherLayoutModal(); printCurrentOtherLayout(); }
 
@@ -1528,6 +1536,15 @@
           updateOtherLayoutPreview(otherLayoutMeasurements);
         });
         otherOverlayRowMeasureValueEl.addEventListener('blur',function(){ updateOtherLayoutPreview(otherLayoutMeasurements); });
+      }
+      if(otherOverlayStartBoxValueEl){
+        otherOverlayStartBoxValueEl.addEventListener('input',function(){
+          var value=parseInt(otherOverlayStartBoxValueEl.value,10);
+          if(!isFinite(value)||value<=0) return;
+          otherLayoutMeasurements.startBox=Math.min(PAGE_SLOTS,value);
+          updateOtherLayoutPreview(otherLayoutMeasurements);
+        });
+        otherOverlayStartBoxValueEl.addEventListener('blur',function(){ updateOtherLayoutPreview(otherLayoutMeasurements); });
       }
       if(otherOverlayTaskMeasureValueEl){
         otherOverlayTaskMeasureValueEl.addEventListener('input',function(){
