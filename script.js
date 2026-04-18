@@ -153,6 +153,8 @@
       var activeFilters = emptyFilterState();
       var draftFilters = emptyFilterState();
       var searchQuery = '';
+      var normalizedSearchQuery = '';
+      var searchRenderTimer = 0;
       var printMode = '';
       var settingsActiveTab = 'owner';
       var loadButtonMode = 'load';
@@ -167,11 +169,11 @@
       function filterValues(state, key){ return (state && state[key] && state[key].length) ? state[key] : []; }
       function totalFilterValueCount(state){ var total=0; for(var i=0;i<FILTER_KEYS.length;i++) total += filterValues(state,FILTER_KEYS[i]).length; return total; }
       function hasActiveFilters(){ return totalFilterValueCount(activeFilters) > 0; }
-      function hasActiveSearch(){ return !!s(searchQuery); }
+      function hasActiveSearch(){ return !!normalizedSearchQuery; }
       function activeFilterCount(){ return totalFilterValueCount(activeFilters); }
       function activeFilterChips(){ var chips=[]; for(var i=0;i<activeFilters.aircraftType.length;i++) chips.push({label:'Type',value:activeFilters.aircraftType[i]}); for(var j=0;j<activeFilters.aircraftReg.length;j++) chips.push({label:'A/C',value:activeFilters.aircraftReg[j]}); for(var k=0;k<activeFilters.supervisor.length;k++) chips.push({label:'Supervisor',value:activeFilters.supervisor[k]}); for(var m=0;m<activeFilters.chapter.length;m++) chips.push({label:'Chapter',value:activeFilters.chapter[m]}); return chips; }
       function syncFilterButtonState(){ if(!filterBtn||!filterCountEl) return; var count=activeFilterCount(); filterBtn.classList.toggle('active',count>0); filterCountEl.hidden=count<1; filterCountEl.textContent=String(count); }
-      function syncSearchUi(){ if(!searchInput||!clearSearchBtn) return; searchInput.value=searchQuery; clearSearchBtn.hidden=!hasActiveSearch(); }
+      function syncSearchUi(){ if(!searchInput||!clearSearchBtn) return; if(searchInput.value!==searchQuery) searchInput.value=searchQuery; clearSearchBtn.hidden=!hasActiveSearch(); }
       function renderFilterStrip(){ if(!filterStripEl) return; var chips=activeFilterChips(); if(!chips.length){ filterStripEl.className='filter-strip'; filterStripEl.innerHTML=''; return; } var html=[]; for(var i=0;i<chips.length;i++) html.push('<span class="filter-chip">'+esc(chips[i].label+': '+chips[i].value)+'</span>'); filterStripEl.className='filter-strip open'; filterStripEl.innerHTML='<div class="filter-strip-text"><strong>Filters:</strong> '+html.join('')+'</div><button type="button" data-clear-filters="1">Clear filters</button>'; }
       function normalizeFilterEntry(key, value){ var raw=s(value); if(!raw) return ''; if(key==='aircraftReg') return raw.toUpperCase(); if(key==='supervisor'){ var sv=normalizeSupervisorValue(raw); return sv.name||raw; } if(key==='chapter'){ var normalized=normalizedText(raw); if(normalized==='no chapter'||normalized==='blank chapter'||normalized==='empty chapter'||normalized==='[no chapter]') return BLANK_CHAPTER_FILTER; } return raw; }
       function uniqueFilterValues(values){ var out=[],seen=Object.create(null); for(var i=0;i<values.length;i++){ var n=normalizedText(values[i]); if(!n||seen[n]) continue; seen[n]=true; out.push(values[i]); } return out; }
@@ -190,9 +192,28 @@
       function closeFilterPanel(){ if(filterModal) filterModal.className='modal-backdrop filter-backdrop'; }
       function readFilterForm(){ commitPendingDraftInputs(); return cloneFilterState(draftFilters); }
       function clearFilters(){ activeFilters=emptyFilterState(); draftFilters=emptyFilterState(); resetDraftFilters(); renderAll(); }
-      function clearSearch(){ searchQuery=''; syncSearchUi(); renderAll(); }
+      function applySearchQuery(value){
+        searchQuery=String(value==null?'':value);
+        normalizedSearchQuery=normalizeSearchText(searchQuery);
+        syncSearchUi();
+      }
+      function scheduleSearchRender(delay){
+        clearTimeout(searchRenderTimer);
+        searchRenderTimer=setTimeout(function(){ renderAll(); },typeof delay==='number'?delay:120);
+      }
+      function clearSearch(){ applySearchQuery(''); clearTimeout(searchRenderTimer); renderAll(); }
       function rowMatchesFilters(row){ var i; if(activeFilters.aircraftType.length){ var typeMatch=false; for(i=0;i<activeFilters.aircraftType.length;i++){ if(normalizedText(aircraftLabel(row)).indexOf(normalizedText(activeFilters.aircraftType[i]))!==-1){ typeMatch=true; break; } } if(!typeMatch) return false; } if(activeFilters.aircraftReg.length){ var regMatch=false; for(i=0;i<activeFilters.aircraftReg.length;i++){ if(normalizedText(s(row['A/C Reg'])).indexOf(normalizedText(activeFilters.aircraftReg[i]))!==-1){ regMatch=true; break; } } if(!regMatch) return false; } if(activeFilters.supervisor.length){ var supervisorName=normalizedText(s(row['Approval Name'])),supervisorFull=normalizedText([s(row['Approval Name']),s(row['Approval stamp']),s(row['Aprroval Licence No.'])].filter(Boolean).join(' | ')),supervisorMatch=false; for(i=0;i<activeFilters.supervisor.length;i++){ var supervisorNeedle=normalizedText(activeFilters.supervisor[i]); if(supervisorName.indexOf(supervisorNeedle)!==-1||supervisorFull.indexOf(supervisorNeedle)!==-1){ supervisorMatch=true; break; } } if(!supervisorMatch) return false; } if(activeFilters.chapter.length){ var chapterMatch=false; for(i=0;i<activeFilters.chapter.length;i++){ var chapterNeedle=activeFilters.chapter[i]; if(chapterNeedle===BLANK_CHAPTER_FILTER){ if(!s(row['Chapter'])){ chapterMatch=true; break; } continue; } chapterNeedle=normalizedText(chapterNeedle); if(normalizedText(chapterLabelText(row)).indexOf(chapterNeedle)!==-1||normalizedText(s(row['Chapter']))===chapterNeedle){ chapterMatch=true; break; } } if(!chapterMatch) return false; } return true; }
-      function rowMatchesSearch(row){ var needle=normalizedText(searchQuery); if(!needle) return true; return normalizedText(s(row['Job No'])).indexOf(needle)!==-1||normalizedText(s(row['Task Detail'])).indexOf(needle)!==-1||normalizedText(s(row['Rewriten for cap741'])).indexOf(needle)!==-1; }
+      function normalizeSearchText(value){ return String(value==null?'':value).toLowerCase().replace(/\s+/g,' ').trim(); }
+      function rowSearchHaystack(row){
+        row=row||{};
+        var key=[row['Job No']||'',row['Task Detail']||'',row['Rewriten for cap741']||''].join('\u0001');
+        if(row.__searchCacheKey!==key){
+          row.__searchCacheKey=key;
+          row.__searchCacheValue=normalizeSearchText((row['Job No']||'')+' '+(row['Task Detail']||'')+' '+(row['Rewriten for cap741']||''));
+        }
+        return row.__searchCacheValue||'';
+      }
+      function rowMatchesSearch(row){ if(!normalizedSearchQuery) return true; return rowSearchHaystack(row).indexOf(normalizedSearchQuery)!==-1; }
       function renderEmptyState(){ if(!hasWorkbookDataLoaded()&&!hasActiveFilters()&&!hasActiveSearch()) return '<div class="empty-state empty-state-blank" data-transition-key="empty-state"><div class="empty-state-title">No workbook loaded</div></div>'; var title='No pages match your search'; var copy='Try a different Job No or task detail search.'; var button='<button type="button" data-clear-search="1">Clear search</button>'; if(hasActiveFilters()&&hasActiveSearch()){ title='No pages match these filters and search'; copy='Try a broader search, change the filters, or clear everything to show the full logbook again.'; button='<button type="button" data-clear-all-results="1">Clear search and filters</button>'; } else if(hasActiveFilters()){ title='No pages match these filters'; copy='Try a broader mix of aircraft type, registration, supervisor, or chapter, or clear the filters to show the full logbook again.'; button='<button type="button" data-clear-filters="1">Clear filters</button>'; } return '<div class="empty-state" data-transition-key="empty-state"><div class="empty-state-title">'+title+'</div><div class="empty-state-copy">'+copy+'</div>'+button+'</div>'; }
 
       // ---- Utilities ----
@@ -358,7 +379,7 @@
       function parseChapterValue(raw){ var value=s(raw),parts=value.split(' - '); return {chapter:s(parts.shift()),chapterDesc:s(parts.join(' - '))}; }
       function workbookDateValue(row){ return row&&row.__dateDirty?row['Date']:(s(row&&row.__rawDate)||s(row&&row['Date'])); }
       function normalizeLoadedRow(row){ var rawDate=s(row&&row['Date']); row['Date']=formatDateDisplay(rawDate); row.__rawDate=rawDate; row.__dateDirty=false; return row; }
-      function clearWorkbookState(){ rows=normalizeRows([]); AIRCRAFT_GROUP_ROWS=[]; AIRCRAFT_MAP=Object.create(null); CHAPTER_OPTIONS=[]; LOG_OWNER_INFO={ name:'', signature:'', stamp:'' }; rebuildSupervisorState([]); activeFilters=emptyFilterState(); draftFilters=emptyFilterState(); searchQuery=''; markSharedDatalistsDirty(); settingsDirty=false; lastSavedLogbookText=fullLogbookText(); }
+      function clearWorkbookState(){ rows=normalizeRows([]); AIRCRAFT_GROUP_ROWS=[]; AIRCRAFT_MAP=Object.create(null); CHAPTER_OPTIONS=[]; LOG_OWNER_INFO={ name:'', signature:'', stamp:'' }; rebuildSupervisorState([]); activeFilters=emptyFilterState(); draftFilters=emptyFilterState(); applySearchQuery(''); markSharedDatalistsDirty(); settingsDirty=false; lastSavedLogbookText=fullLogbookText(); }
 
       // ---- Row model ----
       function emptyLogRow(type, chapter, chapterDesc){ return {__rowId:nextRowId(),'Aircraft Type':s(type),'A/C Reg':'','Chapter':s(chapter),'Chapter Description':s(chapterDesc),'Date':'','Job No':'','FAULT':'','Task Detail':'','Rewriten for cap741':'','Approval Name':'','Approval stamp':'','Aprroval Licence No.':'','Signed':''}; }
@@ -1049,7 +1070,7 @@
         LOG_OWNER_INFO={ name:NEW_WORKBOOK_OWNER_NAME, signature:NEW_WORKBOOK_OWNER_NAME, stamp:NEW_WORKBOOK_OWNER_NAME };
         activeFilters=emptyFilterState();
         draftFilters=emptyFilterState();
-        searchQuery='';
+        applySearchQuery('');
         rebuildSupervisorState([{ id:'1', name:NEW_WORKBOOK_SUPERVISOR_NAME, stamp:NEW_WORKBOOK_SUPERVISOR_NAME, licence:NEW_WORKBOOK_SUPERVISOR_LICENCE, scope:'', date:todaySupervisorDate() }]);
         markSharedDatalistsDirty();
         settingsDirty=false;
@@ -1258,7 +1279,7 @@
       filterForm.onsubmit=function(ev){ ev.preventDefault(); activeFilters=readFilterForm(); closeFilterPanel(); renderAll(); };
       filterModal.onclick=function(ev){ if(ev.target===filterModal) closeFilterPanel(); };
       filterStripEl.onclick=function(ev){ if(ev.target&&ev.target.closest&&ev.target.closest('[data-clear-filters="1"]')) clearFilters(); };
-      if(searchInput) searchInput.addEventListener('input',function(){ searchQuery=s(this.value); syncSearchUi(); renderAll(); });
+      if(searchInput) searchInput.addEventListener('input',function(){ applySearchQuery(this.value); scheduleSearchRender(normalizedSearchQuery?110:0); });
       if(searchInput) searchInput.addEventListener('keydown',function(ev){ if(ev.key==='Escape'&&hasActiveSearch()){ ev.preventDefault(); clearSearch(); } });
       if(clearSearchBtn) clearSearchBtn.onclick=function(){ clearSearch(); if(searchInput) searchInput.focus(); };
       filterForm.addEventListener('keydown',function(ev){ var input=ev.target&&ev.target.closest&&ev.target.closest('[data-filter-key]'); if(!input) return; if(ev.key==='Enter'||ev.key===','){ ev.preventDefault(); addDraftFilterValue(input.getAttribute('data-filter-key'),input.value); } if(ev.key==='Backspace'&&!s(input.value)){ var key=input.getAttribute('data-filter-key'),values=filterValues(draftFilters,key); if(values.length) removeDraftFilterValue(key,values.length-1); } });
