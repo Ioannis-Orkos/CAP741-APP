@@ -114,6 +114,7 @@
       var otherLayoutPreviewEl = document.getElementById('otherLayoutPreview');
       var otherOverlayTopMeasureValueEl = document.getElementById('otherOverlayTopMeasureValue');
       var otherOverlayRowMeasureValueEl = document.getElementById('otherOverlayRowMeasureValue');
+      var otherOverlayTaskMeasureValueEl = document.getElementById('otherOverlayTaskMeasureValue');
       var otherOverlaySampleFrameEl = document.getElementById('otherOverlaySampleFrame');
       var otherOverlaySampleRowEl = document.getElementById('otherOverlaySampleRow');
       var otherOverlayTaskHeaderEl = document.getElementById('otherOverlayTaskHeader');
@@ -275,6 +276,11 @@
             otherOverlayRowMeasureValueEl.value=String(Number((measurements.rowHeight||0).toFixed(1)));
           }
         }
+        if(otherOverlayTaskMeasureValueEl){
+          if(document.activeElement!==otherOverlayTaskMeasureValueEl){
+            otherOverlayTaskMeasureValueEl.value=String(Number((measurements.taskStart||0).toFixed(1)));
+          }
+        }
         otherLayoutPreviewEl.style.setProperty('--preview-frame-top', pct(frameTop,pageHeight));
         otherLayoutPreviewEl.style.setProperty('--preview-frame-left', pct(measurements.left,pageWidth));
         otherLayoutPreviewEl.style.setProperty('--preview-frame-width', pct(frameWidth,pageWidth));
@@ -295,11 +301,14 @@
         if(!frameRect.width||!rowRect.width||!taskRect.width) return;
         var measureHeight=Math.max(0,rowRect.top-frameRect.top+1);
         var measureLeft=Math.max(0,taskRect.left-frameRect.left+(taskRect.width/2));
+        var taskStartWidth=Math.max(0,taskRect.left-frameRect.left+1);
         otherOverlaySampleFrameEl.style.setProperty('--other-overlay-measure-height',measureHeight.toFixed(2)+'px');
         otherOverlaySampleFrameEl.style.setProperty('--other-overlay-measure-left',measureLeft.toFixed(2)+'px');
         otherOverlaySampleFrameEl.style.setProperty('--other-overlay-row-measure-top',Math.max(0,rowRect.top-frameRect.top+1).toFixed(2)+'px');
         otherOverlaySampleFrameEl.style.setProperty('--other-overlay-row-measure-height',Math.max(0,rowRect.height-1).toFixed(2)+'px');
         otherOverlaySampleFrameEl.style.setProperty('--other-overlay-row-measure-left',measureLeft.toFixed(2)+'px');
+        otherOverlaySampleFrameEl.style.setProperty('--other-overlay-task-measure-width',taskStartWidth.toFixed(2)+'px');
+        otherOverlaySampleFrameEl.style.setProperty('--other-overlay-task-measure-top',Math.max(0,rowRect.top-frameRect.top+rowRect.height+6).toFixed(2)+'px');
       }
       function writeOtherLayoutModalValues(measurements){
         measurements=cloneMeasurementState(measurements);
@@ -1477,6 +1486,15 @@
           updateOtherLayoutPreview(otherLayoutMeasurements);
         });
         otherOverlayRowMeasureValueEl.addEventListener('blur',function(){ updateOtherLayoutPreview(otherLayoutMeasurements); });
+      }
+      if(otherOverlayTaskMeasureValueEl){
+        otherOverlayTaskMeasureValueEl.addEventListener('input',function(){
+          var value=Number(otherOverlayTaskMeasureValueEl.value);
+          if(!isFinite(value)||value<=0) return;
+          otherLayoutMeasurements.taskStart=value;
+          updateOtherLayoutPreview(otherLayoutMeasurements);
+        });
+        otherOverlayTaskMeasureValueEl.addEventListener('blur',function(){ updateOtherLayoutPreview(otherLayoutMeasurements); });
       }
       [otherLayoutTopEl,otherLayoutHeaderHeightEl,otherLayoutLeftEl,otherLayoutDateStartEl,otherLayoutRegStartEl,otherLayoutJobStartEl,otherLayoutTaskStartEl,otherLayoutSuperStartEl,otherLayoutEndEl,otherLayoutRowHeightEl,otherLayoutTextTopEl,otherLayoutTextLeftEl].forEach(function(input){
         if(!input) return;
