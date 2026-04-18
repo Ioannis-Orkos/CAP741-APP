@@ -50,6 +50,7 @@
   <div class="print-options" id="printOptions" aria-hidden="true">
     <button class="print-option-btn" id="printCurrentBtn" type="button">Current Page</button>
     <button class="print-option-btn" id="printCurrentOverlayBtn" type="button">Current Page Overlay</button>
+    <button class="print-option-btn" id="printOtherLayoutBtn" type="button">Other Overlay</button>
     <button class="print-option-btn" id="printAllBtn" type="button">All Pages</button>
   </div>
   <button class="save-fab" id="saveFileBtn" aria-label="Save changes to file" title="Save changes to cap741-data.xlsx">
@@ -65,6 +66,63 @@
   <div class="modal-backdrop" id="blankModal"><div class="modal-shell"><div class="modal-actions"><button class="btn-save" id="saveBlankPage" type="button">Save</button><button class="btn-cancel" id="cancelBlankPage" type="button">X</button></div><div id="blankModalBody"></div></div></div>
   <div class="modal-backdrop" id="taskDetailModal"><div class="detail-modal-card"><button class="detail-modal-close" id="closeTaskDetail" type="button">X</button><div class="detail-modal-title">Task Detail</div><div class="detail-block"><div class="detail-label">Chapter</div><input class="detail-input" id="detailChapter" type="text" list="chapter-list" placeholder="Set chapter"></div><div class="detail-block"><div class="detail-label">Fault</div><textarea class="detail-input detail-textarea" id="detailFault" placeholder="Fault"></textarea></div><div class="detail-block"><div class="detail-label">Task Detail</div><textarea class="detail-input detail-textarea" id="detailTask" placeholder="Task detail"></textarea></div><div class="detail-block"><div class="detail-label">Rewritten for CAP 741</div><textarea class="detail-input detail-textarea" id="detailRewrite" placeholder="Rewritten for CAP 741"></textarea></div><div class="detail-actions"><button class="detail-save" id="saveTaskDetail" type="button">Save changes</button></div></div></div>
   <div class="modal-backdrop" id="confirmModal"><div class="confirm-card"><div class="confirm-title" id="confirmTitle">Clear Row</div><p class="confirm-copy" id="confirmText">This will remove all content in this row from the logbook page.</p><div class="confirm-actions"><button class="confirm-cancel" id="confirmCancelBtn" type="button">Cancel</button><button class="confirm-ok" id="confirmOkBtn" type="button">Clear row</button></div></div></div>
+  <div class="modal-backdrop" id="otherLayoutModal">
+    <div class="cap741-overlay-card">
+      <button class="cap741-overlay-close" id="closeOtherLayoutModal" type="button" aria-label="Close other overlay print setup">X</button>
+      <h2 class="cap741-overlay-title">Other Overlay</h2>
+      <p class="cap741-overlay-copy">This is the clean base preview for the other overlay layout. We can rebuild the measurement guide on top of it from here.</p>
+      <div class="cap741-overlay-preview" id="otherLayoutPreview">
+        <div class="cap741-overlay-sketch-shell other-overlay-sketch-shell">
+          <div class="other-overlay-row-sample" aria-hidden="true">
+            <div class="other-overlay-row-sample-frame">
+              <div class="other-overlay-page-headrow">
+                <span>CAP 741</span>
+                <span>Aircraft Maintenance Engineer&apos;s Logbook</span>
+              </div>
+              <div class="other-overlay-page-topline"></div>
+              <div class="other-overlay-page-title">
+                <span>Section 3.1</span>
+                <span>Maintenance Experience</span>
+              </div>
+              <div class="other-overlay-page-meta">
+                <div class="other-overlay-page-field">
+                  <div class="other-overlay-page-line">
+                    <span class="other-overlay-page-label">Aircraft Type:</span>
+                    <span class="other-overlay-page-value">Airbus A350-1000 - RR Trent XWB-97</span>
+                  </div>
+                  <div class="other-overlay-page-subnote">(Aircraft/Engine combination)</div>
+                </div>
+                <div class="other-overlay-page-field other-overlay-page-field-ata">
+                  <div class="other-overlay-page-line">
+                    <span class="other-overlay-page-label">ATA Chapter:</span>
+                    <span class="other-overlay-page-value"></span>
+                  </div>
+                </div>
+              </div>
+              <div class="other-overlay-row-sample-header">
+                <span>Date</span>
+                <span>A/C Reg</span>
+                <span>Job No</span>
+                <span>Task Detail</span>
+                <span>Supervisor&apos;s Name, Signature and Licence Number</span>
+              </div>
+              <div class="other-overlay-row-sample-row">
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+                <span class="other-overlay-row-sample-super">*</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="cap741-overlay-actions">
+        <button class="cap741-overlay-secondary" id="resetOtherLayoutDefaults" type="button">Default</button>
+        <button class="cap741-overlay-primary" id="printOtherLayoutConfirm" type="button">Print</button>
+      </div>
+    </div>
+  </div>
   <div class="modal-backdrop" id="googleSheetModal"><div class="google-sheet-card"><button class="google-sheet-close" id="closeGoogleSheetModal" type="button" aria-label="Close Google Sheet dialog">X</button><div class="google-sheet-title" id="googleSheetModalTitle">Connect Google Sheet</div><p class="google-sheet-copy" id="googleSheetModalCopy">Paste the Google Sheet URL or just the sheet ID.</p><div class="google-sheet-field" id="googleSheetInputWrap"><label for="googleSheetUrlInput">Sheet URL or ID</label><input class="google-sheet-input" id="googleSheetUrlInput" type="text" autocomplete="off" placeholder="Paste Google Sheet URL or ID"></div><div class="google-sheet-link-row" id="googleSheetResultRow" hidden><a class="google-sheet-link" id="googleSheetResultLink" href="#" target="_blank" rel="noreferrer noopener"></a></div><p class="google-sheet-note" id="googleSheetModalNote"></p><div class="confirm-actions google-sheet-actions"><button class="confirm-cancel" id="googleSheetCancelBtn" type="button">Cancel</button><button class="confirm-ok" id="googleSheetOkBtn" type="button">Connect</button></div></div></div>
   <div class="modal-backdrop" id="infoModal"><div class="info-card"><button class="info-close" id="closeInfoModal" type="button" aria-label="Close info">X</button><h2 class="info-title">About</h2><p class="info-copy">Developed by <strong>Ioannis Orkos</strong></p><p class="info-copy">Contact: <a href="mailto:yohannisnicos@gmail.com">yohannisnicos@gmail.com</a></p><p class="info-copy">Logbook data can be stored in either an Excel file or a Google Sheet. The app remembers the last linked source until you unlink it in Settings.</p></div></div>
   <div class="modal-backdrop" id="settingsModal"><div class="settings-card"><button class="settings-close" id="closeSettingsModal" type="button" aria-label="Close settings">X</button><div class="settings-head"><div><h2 class="settings-title">Reference Data Settings</h2><p class="settings-copy">Manage supervisors, aircraft groups/types, chapters, and owner info from one place.</p></div></div><div class="settings-body" id="settingsBody"></div><div class="settings-footer"><button class="settings-save" id="saveSettingsBtn" type="button">Save settings</button></div></div></div>

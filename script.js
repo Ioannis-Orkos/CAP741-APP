@@ -54,6 +54,7 @@
       var NEW_WORKBOOK_SUPERVISOR_LICENCE = 'UK.XX.XXXXXXX';
       var NEW_WORKBOOK_TASK_TEXT = 'Dummy data test one';
       var NEW_WORKBOOK_OWNER_NAME = 'User User';
+      var OTHER_LAYOUT_DEFAULTS = { top: 37, headerHeight: 11, left: 14.5, dateStart: 14.5, regStart: 31, jobStart: 52, taskStart: 68, superStart: 142, end: 193, rowHeight: 13, textTop: 1, textLeft: 1 };
 
       // ---- DOM refs ----
       var errorBox = document.getElementById('errorBox');
@@ -77,6 +78,7 @@
       var printOptionsEl = document.getElementById('printOptions');
       var printCurrentBtn = document.getElementById('printCurrentBtn');
       var printCurrentOverlayBtn = document.getElementById('printCurrentOverlayBtn');
+      var printOtherLayoutBtn = document.getElementById('printOtherLayoutBtn');
       var printAllBtn = document.getElementById('printAllBtn');
       var saveFileBtn = document.getElementById('saveFileBtn');
       var infoBtn = document.getElementById('infoBtn');
@@ -104,6 +106,24 @@
       var confirmTextEl = document.getElementById('confirmText');
       var confirmCancelBtn = document.getElementById('confirmCancelBtn');
       var confirmOkBtn = document.getElementById('confirmOkBtn');
+      var otherLayoutModal = document.getElementById('otherLayoutModal');
+      var closeOtherLayoutModalBtn = document.getElementById('closeOtherLayoutModal');
+      var cancelOtherLayoutPrintBtn = document.getElementById('cancelOtherLayoutPrint');
+      var resetOtherLayoutDefaultsBtn = document.getElementById('resetOtherLayoutDefaults');
+      var printOtherLayoutConfirmBtn = document.getElementById('printOtherLayoutConfirm');
+      var otherLayoutPreviewEl = document.getElementById('otherLayoutPreview');
+      var otherLayoutTopEl = document.getElementById('otherLayoutTop');
+      var otherLayoutHeaderHeightEl = document.getElementById('otherLayoutHeaderHeight');
+      var otherLayoutLeftEl = document.getElementById('otherLayoutLeft');
+      var otherLayoutDateStartEl = document.getElementById('otherLayoutDateStart');
+      var otherLayoutRegStartEl = document.getElementById('otherLayoutRegStart');
+      var otherLayoutJobStartEl = document.getElementById('otherLayoutJobStart');
+      var otherLayoutTaskStartEl = document.getElementById('otherLayoutTaskStart');
+      var otherLayoutSuperStartEl = document.getElementById('otherLayoutSuperStart');
+      var otherLayoutEndEl = document.getElementById('otherLayoutEnd');
+      var otherLayoutRowHeightEl = document.getElementById('otherLayoutRowHeight');
+      var otherLayoutTextTopEl = document.getElementById('otherLayoutTextTop');
+      var otherLayoutTextLeftEl = document.getElementById('otherLayoutTextLeft');
       var googleSheetModal = document.getElementById('googleSheetModal');
       var closeGoogleSheetModalBtn = document.getElementById('closeGoogleSheetModal');
       var googleSheetModalTitleEl = document.getElementById('googleSheetModalTitle');
@@ -162,6 +182,7 @@
       var activeStorageSource = { type: STORAGE_SOURCE_NONE };
       var googleAccessToken = '';
       var googleTokenClient = null;
+      var otherLayoutMeasurements = cloneMeasurementState(OTHER_LAYOUT_DEFAULTS);
 
       // ---- Filter state ----
       function emptyFilterState(){ return { aircraftType:[], aircraftReg:[], supervisor:[], chapter:[] }; }
@@ -202,6 +223,103 @@
         searchRenderTimer=setTimeout(function(){ renderAll(); },typeof delay==='number'?delay:120);
       }
       function clearSearch(){ applySearchQuery(''); clearTimeout(searchRenderTimer); renderAll(); }
+      function cloneMeasurementState(source){
+        source=source||OTHER_LAYOUT_DEFAULTS;
+        return {
+          top:Number(source.top)||0,
+          headerHeight:Number(source.headerHeight)||0,
+          left:Number(source.left)||0,
+          dateStart:Number(source.dateStart)||0,
+          regStart:Number(source.regStart)||0,
+          jobStart:Number(source.jobStart)||0,
+          taskStart:Number(source.taskStart)||0,
+          superStart:Number(source.superStart)||0,
+          end:Number(source.end)||0,
+          rowHeight:Number(source.rowHeight)||0,
+          textTop:Number(source.textTop)||0,
+          textLeft:Number(source.textLeft)||0
+        };
+      }
+      function writeMeasurementCssVars(prefix, measurements, target){
+        target=target||document.documentElement;
+        function setVar(name, value, unit){ target.style.setProperty(prefix+name,String(value)+(unit||'')); }
+        setVar('--top', measurements.top, 'mm');
+        setVar('--header-height', measurements.headerHeight, 'mm');
+        setVar('--left', measurements.left, 'mm');
+        setVar('--frame-width', Math.max(1,measurements.end-measurements.left), 'mm');
+        setVar('--row-height', measurements.rowHeight, 'mm');
+        setVar('--text-top', measurements.textTop, 'mm');
+        setVar('--text-left', measurements.textLeft, 'mm');
+        setVar('--date-width', Math.max(1,measurements.regStart-measurements.dateStart), 'mm');
+        setVar('--reg-width', Math.max(1,measurements.jobStart-measurements.regStart), 'mm');
+        setVar('--job-width', Math.max(1,measurements.taskStart-measurements.jobStart), 'mm');
+        setVar('--task-width', Math.max(1,measurements.superStart-measurements.taskStart), 'mm');
+        setVar('--sup-width', Math.max(1,measurements.end-measurements.superStart), 'mm');
+      }
+      function updateOtherLayoutPreview(measurements){
+        if(!otherLayoutPreviewEl) return;
+        var pageWidth=210,pageHeight=148,frameWidth=Math.max(1,measurements.end-measurements.left),rowHeight=Math.max(.1,measurements.rowHeight),headerHeight=Math.max(.1,measurements.headerHeight),frameTop=Math.max(0,measurements.top-headerHeight);
+        function pct(num, den){ return (Math.max(0,num)/Math.max(.1,den)*100).toFixed(3)+'%'; }
+        otherLayoutPreviewEl.style.setProperty('--preview-frame-top', pct(frameTop,pageHeight));
+        otherLayoutPreviewEl.style.setProperty('--preview-frame-left', pct(measurements.left,pageWidth));
+        otherLayoutPreviewEl.style.setProperty('--preview-frame-width', pct(frameWidth,pageWidth));
+        otherLayoutPreviewEl.style.setProperty('--preview-header-height', pct(headerHeight,pageHeight));
+        otherLayoutPreviewEl.style.setProperty('--preview-row-height', pct(rowHeight,pageHeight));
+        otherLayoutPreviewEl.style.setProperty('--preview-date-width', pct(measurements.regStart-measurements.dateStart,frameWidth));
+        otherLayoutPreviewEl.style.setProperty('--preview-reg-width', pct(measurements.jobStart-measurements.regStart,frameWidth));
+        otherLayoutPreviewEl.style.setProperty('--preview-job-width', pct(measurements.taskStart-measurements.jobStart,frameWidth));
+        otherLayoutPreviewEl.style.setProperty('--preview-task-width', pct(measurements.superStart-measurements.taskStart,frameWidth));
+        otherLayoutPreviewEl.style.setProperty('--preview-sup-width', pct(measurements.end-measurements.superStart,frameWidth));
+      }
+      function writeOtherLayoutModalValues(measurements){
+        measurements=cloneMeasurementState(measurements);
+        if(otherLayoutTopEl) otherLayoutTopEl.value=measurements.top;
+        if(otherLayoutHeaderHeightEl) otherLayoutHeaderHeightEl.value=measurements.headerHeight;
+        if(otherLayoutLeftEl) otherLayoutLeftEl.value=measurements.left;
+        if(otherLayoutDateStartEl) otherLayoutDateStartEl.value=measurements.dateStart;
+        if(otherLayoutRegStartEl) otherLayoutRegStartEl.value=measurements.regStart;
+        if(otherLayoutJobStartEl) otherLayoutJobStartEl.value=measurements.jobStart;
+        if(otherLayoutTaskStartEl) otherLayoutTaskStartEl.value=measurements.taskStart;
+        if(otherLayoutSuperStartEl) otherLayoutSuperStartEl.value=measurements.superStart;
+        if(otherLayoutEndEl) otherLayoutEndEl.value=measurements.end;
+        if(otherLayoutRowHeightEl) otherLayoutRowHeightEl.value=measurements.rowHeight;
+        if(otherLayoutTextTopEl) otherLayoutTextTopEl.value=measurements.textTop;
+        if(otherLayoutTextLeftEl) otherLayoutTextLeftEl.value=measurements.textLeft;
+        updateOtherLayoutPreview(measurements);
+      }
+      function readOtherLayoutMeasurementInput(input, fallback){ var value=Number(input&&input.value); return isFinite(value)&&value>0?value:fallback; }
+      function previewOtherLayoutMeasurements(){
+        return {
+          top:readOtherLayoutMeasurementInput(otherLayoutTopEl,otherLayoutMeasurements.top),
+          headerHeight:readOtherLayoutMeasurementInput(otherLayoutHeaderHeightEl,otherLayoutMeasurements.headerHeight),
+          left:readOtherLayoutMeasurementInput(otherLayoutLeftEl,otherLayoutMeasurements.left),
+          dateStart:readOtherLayoutMeasurementInput(otherLayoutDateStartEl,otherLayoutMeasurements.dateStart),
+          regStart:readOtherLayoutMeasurementInput(otherLayoutRegStartEl,otherLayoutMeasurements.regStart),
+          jobStart:readOtherLayoutMeasurementInput(otherLayoutJobStartEl,otherLayoutMeasurements.jobStart),
+          taskStart:readOtherLayoutMeasurementInput(otherLayoutTaskStartEl,otherLayoutMeasurements.taskStart),
+          superStart:readOtherLayoutMeasurementInput(otherLayoutSuperStartEl,otherLayoutMeasurements.superStart),
+          end:readOtherLayoutMeasurementInput(otherLayoutEndEl,otherLayoutMeasurements.end),
+          rowHeight:readOtherLayoutMeasurementInput(otherLayoutRowHeightEl,otherLayoutMeasurements.rowHeight),
+          textTop:readOtherLayoutMeasurementInput(otherLayoutTextTopEl,otherLayoutMeasurements.textTop),
+          textLeft:readOtherLayoutMeasurementInput(otherLayoutTextLeftEl,otherLayoutMeasurements.textLeft)
+        };
+      }
+      function readOtherLayoutModalValues(){
+        var measurements=previewOtherLayoutMeasurements();
+        if(!(measurements.top>measurements.headerHeight)){
+          throw new Error('Top to row 1 must be greater than header height.');
+        }
+        if(!(measurements.left<=measurements.dateStart&&measurements.dateStart<measurements.regStart&&measurements.regStart<measurements.jobStart&&measurements.jobStart<measurements.taskStart&&measurements.taskStart<measurements.superStart&&measurements.superStart<measurements.end)){
+          throw new Error('Layout values must increase from left edge to end edge.');
+        }
+        return measurements;
+      }
+      function openOtherLayoutModal(){
+        writeOtherLayoutModalValues(otherLayoutMeasurements);
+        if(otherLayoutModal) otherLayoutModal.className='modal-backdrop open';
+        if(otherLayoutTopEl) setTimeout(function(){ otherLayoutTopEl.focus(); if(otherLayoutTopEl.select) otherLayoutTopEl.select(); },0);
+      }
+      function closeOtherLayoutModal(){ if(otherLayoutModal) otherLayoutModal.className='modal-backdrop'; }
       function rowMatchesFilters(row){ var i; if(activeFilters.aircraftType.length){ var typeMatch=false; for(i=0;i<activeFilters.aircraftType.length;i++){ if(normalizedText(aircraftLabel(row)).indexOf(normalizedText(activeFilters.aircraftType[i]))!==-1){ typeMatch=true; break; } } if(!typeMatch) return false; } if(activeFilters.aircraftReg.length){ var regMatch=false; for(i=0;i<activeFilters.aircraftReg.length;i++){ if(normalizedText(s(row['A/C Reg'])).indexOf(normalizedText(activeFilters.aircraftReg[i]))!==-1){ regMatch=true; break; } } if(!regMatch) return false; } if(activeFilters.supervisor.length){ var supervisorName=normalizedText(s(row['Approval Name'])),supervisorFull=normalizedText([s(row['Approval Name']),s(row['Approval stamp']),s(row['Aprroval Licence No.'])].filter(Boolean).join(' | ')),supervisorMatch=false; for(i=0;i<activeFilters.supervisor.length;i++){ var supervisorNeedle=normalizedText(activeFilters.supervisor[i]); if(supervisorName.indexOf(supervisorNeedle)!==-1||supervisorFull.indexOf(supervisorNeedle)!==-1){ supervisorMatch=true; break; } } if(!supervisorMatch) return false; } if(activeFilters.chapter.length){ var chapterMatch=false; for(i=0;i<activeFilters.chapter.length;i++){ var chapterNeedle=activeFilters.chapter[i]; if(chapterNeedle===BLANK_CHAPTER_FILTER){ if(!s(row['Chapter'])){ chapterMatch=true; break; } continue; } chapterNeedle=normalizedText(chapterNeedle); if(normalizedText(chapterLabelText(row)).indexOf(chapterNeedle)!==-1||normalizedText(s(row['Chapter']))===chapterNeedle){ chapterMatch=true; break; } } if(!chapterMatch) return false; } return true; }
       function normalizeSearchText(value){ return String(value==null?'':value).toLowerCase().replace(/\s+/g,' ').trim(); }
       function rowSearchHaystack(row){
@@ -618,10 +736,12 @@
       // ---- Print ----
       function pageElements(){ return Array.prototype.slice.call(pagesEl.querySelectorAll('.page')); }
       function currentVisiblePage(){ var pages=pageElements(); if(!pages.length) return null; var viewportMid=window.innerHeight/2,best=pages[0],bestDistance=Infinity; for(var i=0;i<pages.length;i++){ var rect=pages[i].getBoundingClientRect(),center=rect.top+(rect.height/2),distance=Math.abs(center-viewportMid); if(rect.top<=viewportMid&&rect.bottom>=viewportMid) return pages[i]; if(distance<bestDistance){ bestDistance=distance; best=pages[i]; } } return best; }
-      function clearPrintSelection(){ var pages=pageElements(); document.body.classList.remove('print-current','print-current-overlay'); for(var i=0;i<pages.length;i++) pages[i].classList.remove('print-exclude'); printMode=''; }
+      function clearPrintSelection(){ var pages=pageElements(); document.body.classList.remove('print-current','print-current-overlay','print-current-other-layout'); for(var i=0;i<pages.length;i++) pages[i].classList.remove('print-exclude'); printMode=''; }
       function printCurrentPage(){ var current=currentVisiblePage(),pages=pageElements(); clearPrintSelection(); if(!current||!pages.length){ window.print(); return; } document.body.classList.add('print-current'); for(var i=0;i<pages.length;i++){ if(pages[i]!==current) pages[i].classList.add('print-exclude'); } printMode='current'; window.print(); }
       function printCurrentPageOverlay(){ var current=currentVisiblePage(),pages=pageElements(); clearPrintSelection(); if(!current||!pages.length){ window.print(); return; } document.body.classList.add('print-current-overlay'); for(var i=0;i<pages.length;i++){ if(pages[i]!==current) pages[i].classList.add('print-exclude'); } printMode='current-overlay'; window.print(); }
+      function printCurrentOtherLayout(){ var current=currentVisiblePage(),pages=pageElements(); clearPrintSelection(); if(!current||!pages.length){ window.print(); return; } writeMeasurementCssVars('--other-layout',otherLayoutMeasurements); document.body.classList.add('print-current-other-layout'); for(var i=0;i<pages.length;i++){ if(pages[i]!==current) pages[i].classList.add('print-exclude'); } printMode='current-other-layout'; window.print(); }
       function printAllPages(){ clearPrintSelection(); printMode='all'; window.print(); }
+      function confirmOtherLayoutPrint(){ otherLayoutMeasurements=readOtherLayoutModalValues(); closeOtherLayoutModal(); printCurrentOtherLayout(); }
 
       // ---- Editor active state ----
       function editorIsActive(){ var active=document.activeElement; if(!active) return false; return !!(pagesEl.contains(active)&&(active.matches('input, textarea, [contenteditable="true"]')||active.classList.contains('editable-cell'))); }
@@ -1305,6 +1425,15 @@
       if(confirmCancelBtn) confirmCancelBtn.onclick=function(){ closeConfirmDialog(false); };
       if(confirmOkBtn) confirmOkBtn.onclick=function(){ closeConfirmDialog(true); };
       if(confirmModal) confirmModal.onclick=function(ev){ if(ev.target===confirmModal) closeConfirmDialog(false); };
+      if(closeOtherLayoutModalBtn) closeOtherLayoutModalBtn.onclick=closeOtherLayoutModal;
+      if(cancelOtherLayoutPrintBtn) cancelOtherLayoutPrintBtn.onclick=closeOtherLayoutModal;
+      if(resetOtherLayoutDefaultsBtn) resetOtherLayoutDefaultsBtn.onclick=function(){ otherLayoutMeasurements=cloneMeasurementState(OTHER_LAYOUT_DEFAULTS); writeOtherLayoutModalValues(otherLayoutMeasurements); if(otherLayoutTopEl) otherLayoutTopEl.focus(); };
+      if(printOtherLayoutConfirmBtn) printOtherLayoutConfirmBtn.onclick=confirmOtherLayoutPrint;
+      if(otherLayoutModal) otherLayoutModal.onclick=function(ev){ if(ev.target===otherLayoutModal) closeOtherLayoutModal(); };
+      [otherLayoutTopEl,otherLayoutHeaderHeightEl,otherLayoutLeftEl,otherLayoutDateStartEl,otherLayoutRegStartEl,otherLayoutJobStartEl,otherLayoutTaskStartEl,otherLayoutSuperStartEl,otherLayoutEndEl,otherLayoutRowHeightEl,otherLayoutTextTopEl,otherLayoutTextLeftEl].forEach(function(input){
+        if(!input) return;
+        input.addEventListener('input',function(){ updateOtherLayoutPreview(previewOtherLayoutMeasurements()); });
+      });
       if(closeGoogleSheetModalBtn) closeGoogleSheetModalBtn.onclick=function(){ closeGoogleSheetModal(null); };
       if(googleSheetCancelBtn) googleSheetCancelBtn.onclick=function(){ closeGoogleSheetModal(null); };
       if(googleSheetOkBtn) googleSheetOkBtn.onclick=function(){ closeGoogleSheetModal(googleSheetInputWrapEl&&!googleSheetInputWrapEl.hidden&&googleSheetUrlInputEl?googleSheetUrlInputEl.value:true); };
@@ -1318,6 +1447,7 @@
       printBtn.onclick=function(ev){ if(ev) ev.stopPropagation(); setLoadOptionsOpen(false); setPrintOptionsOpen(!(printOptionsEl&&printOptionsEl.classList.contains('open'))); };
       printCurrentBtn.onclick=function(){ setPrintOptionsOpen(false); printCurrentPage(); };
       if(printCurrentOverlayBtn) printCurrentOverlayBtn.onclick=function(){ setPrintOptionsOpen(false); printCurrentPageOverlay(); };
+      if(printOtherLayoutBtn) printOtherLayoutBtn.onclick=function(){ setPrintOptionsOpen(false); openOtherLayoutModal(); };
       printAllBtn.onclick=function(){ setPrintOptionsOpen(false); printAllPages(); };
       document.addEventListener('click',function(ev){
         var insidePrint=!!(ev.target.closest&&(ev.target.closest('#printBtn')||ev.target.closest('#printOptions')));
