@@ -116,9 +116,16 @@
       var otherOverlayRowMeasureValueEl = document.getElementById('otherOverlayRowMeasureValue');
       var otherOverlayTaskMeasureValueEl = document.getElementById('otherOverlayTaskMeasureValue');
       var otherOverlayTaskWidthMeasureValueEl = document.getElementById('otherOverlayTaskWidthMeasureValue');
+      var otherOverlayDateMeasureValueEl = document.getElementById('otherOverlayDateMeasureValue');
+      var otherOverlayRegMeasureValueEl = document.getElementById('otherOverlayRegMeasureValue');
+      var otherOverlayJobMeasureValueEl = document.getElementById('otherOverlayJobMeasureValue');
+      var otherOverlaySuperMeasureValueEl = document.getElementById('otherOverlaySuperMeasureValue');
       var otherOverlaySampleFrameEl = document.getElementById('otherOverlaySampleFrame');
       var otherOverlaySampleRowEl = document.getElementById('otherOverlaySampleRow');
+      var otherOverlayDateHeaderEl = document.getElementById('otherOverlayDateHeader');
+      var otherOverlayRegHeaderEl = document.getElementById('otherOverlayRegHeader');
       var otherOverlayTaskHeaderEl = document.getElementById('otherOverlayTaskHeader');
+      var otherOverlaySuperHeaderEl = document.getElementById('otherOverlaySuperHeader');
       var otherLayoutTopEl = document.getElementById('otherLayoutTop');
       var otherLayoutHeaderHeightEl = document.getElementById('otherLayoutHeaderHeight');
       var otherLayoutLeftEl = document.getElementById('otherLayoutLeft');
@@ -249,6 +256,8 @@
       }
       function writeMeasurementCssVars(prefix, measurements, target){
         target=target||document.documentElement;
+        measurements=cloneMeasurementState(measurements);
+        measurements.dateStart=measurements.left;
         function setVar(name, value, unit){ target.style.setProperty(prefix+name,String(value)+(unit||'')); }
         setVar('--top', measurements.top, 'mm');
         setVar('--header-height', measurements.headerHeight, 'mm');
@@ -265,7 +274,9 @@
       }
       function updateOtherLayoutPreview(measurements){
         if(!otherLayoutPreviewEl) return;
-        var pageWidth=210,pageHeight=148,frameWidth=Math.max(1,measurements.end-measurements.left),rowHeight=Math.max(.1,measurements.rowHeight),headerHeight=Math.max(.1,measurements.headerHeight),frameTop=Math.max(0,measurements.top-headerHeight);
+        measurements=cloneMeasurementState(measurements);
+        measurements.dateStart=measurements.left;
+        var pageWidth=210,pageHeight=148,frameWidth=Math.max(1,measurements.end-measurements.left),rowHeight=Math.max(.1,measurements.rowHeight),headerHeight=Math.max(.1,measurements.headerHeight),frameTop=Math.max(0,measurements.top-headerHeight),dateWidth=Math.max(0,(measurements.regStart||0)-(measurements.left||0)),regWidth=Math.max(0,(measurements.jobStart||0)-(measurements.regStart||0)),jobWidth=Math.max(0,(measurements.taskStart||0)-(measurements.jobStart||0)),taskWidth=Math.max(0,(measurements.superStart||0)-(measurements.taskStart||0)),superWidth=Math.max(0,(measurements.end||0)-(measurements.superStart||0));
         function pct(num, den){ return (Math.max(0,num)/Math.max(.1,den)*100).toFixed(3)+'%'; }
         if(otherOverlayTopMeasureValueEl){
           if(document.activeElement!==otherOverlayTopMeasureValueEl){
@@ -284,7 +295,27 @@
         }
         if(otherOverlayTaskWidthMeasureValueEl){
           if(document.activeElement!==otherOverlayTaskWidthMeasureValueEl){
-            otherOverlayTaskWidthMeasureValueEl.value=String(Number((Math.max(0,(measurements.superStart||0)-(measurements.taskStart||0))).toFixed(1)));
+            otherOverlayTaskWidthMeasureValueEl.value=String(Number(taskWidth.toFixed(1)));
+          }
+        }
+        if(otherOverlayDateMeasureValueEl){
+          if(document.activeElement!==otherOverlayDateMeasureValueEl){
+            otherOverlayDateMeasureValueEl.value=String(Number(dateWidth.toFixed(1)));
+          }
+        }
+        if(otherOverlayRegMeasureValueEl){
+          if(document.activeElement!==otherOverlayRegMeasureValueEl){
+            otherOverlayRegMeasureValueEl.value=String(Number(regWidth.toFixed(1)));
+          }
+        }
+        if(otherOverlayJobMeasureValueEl){
+          if(document.activeElement!==otherOverlayJobMeasureValueEl){
+            otherOverlayJobMeasureValueEl.value=String(Number(jobWidth.toFixed(1)));
+          }
+        }
+        if(otherOverlaySuperMeasureValueEl){
+          if(document.activeElement!==otherOverlaySuperMeasureValueEl){
+            otherOverlaySuperMeasureValueEl.value=String(Number(superWidth.toFixed(1)));
           }
         }
         otherLayoutPreviewEl.style.setProperty('--preview-frame-top', pct(frameTop,pageHeight));
@@ -292,11 +323,11 @@
         otherLayoutPreviewEl.style.setProperty('--preview-frame-width', pct(frameWidth,pageWidth));
         otherLayoutPreviewEl.style.setProperty('--preview-header-height', pct(headerHeight,pageHeight));
         otherLayoutPreviewEl.style.setProperty('--preview-row-height', pct(rowHeight,pageHeight));
-        otherLayoutPreviewEl.style.setProperty('--preview-date-width', pct(measurements.regStart-measurements.dateStart,frameWidth));
-        otherLayoutPreviewEl.style.setProperty('--preview-reg-width', pct(measurements.jobStart-measurements.regStart,frameWidth));
-        otherLayoutPreviewEl.style.setProperty('--preview-job-width', pct(measurements.taskStart-measurements.jobStart,frameWidth));
-        otherLayoutPreviewEl.style.setProperty('--preview-task-width', pct(measurements.superStart-measurements.taskStart,frameWidth));
-        otherLayoutPreviewEl.style.setProperty('--preview-sup-width', pct(measurements.end-measurements.superStart,frameWidth));
+        otherLayoutPreviewEl.style.setProperty('--preview-date-width', pct(dateWidth,frameWidth));
+        otherLayoutPreviewEl.style.setProperty('--preview-reg-width', pct(regWidth,frameWidth));
+        otherLayoutPreviewEl.style.setProperty('--preview-job-width', pct(jobWidth,frameWidth));
+        otherLayoutPreviewEl.style.setProperty('--preview-task-width', pct(taskWidth,frameWidth));
+        otherLayoutPreviewEl.style.setProperty('--preview-sup-width', pct(superWidth,frameWidth));
         requestAnimationFrame(syncOtherOverlaySampleGuide);
       }
       function syncOtherOverlaySampleGuide(){
@@ -338,11 +369,12 @@
       }
       function readOtherLayoutMeasurementInput(input, fallback){ var value=Number(input&&input.value); return isFinite(value)&&value>0?value:fallback; }
       function previewOtherLayoutMeasurements(){
+        var left=readOtherLayoutMeasurementInput(otherLayoutLeftEl,otherLayoutMeasurements.left);
         return {
           top:readOtherLayoutMeasurementInput(otherLayoutTopEl,otherLayoutMeasurements.top),
           headerHeight:readOtherLayoutMeasurementInput(otherLayoutHeaderHeightEl,otherLayoutMeasurements.headerHeight),
-          left:readOtherLayoutMeasurementInput(otherLayoutLeftEl,otherLayoutMeasurements.left),
-          dateStart:readOtherLayoutMeasurementInput(otherLayoutDateStartEl,otherLayoutMeasurements.dateStart),
+          left:left,
+          dateStart:left,
           regStart:readOtherLayoutMeasurementInput(otherLayoutRegStartEl,otherLayoutMeasurements.regStart),
           jobStart:readOtherLayoutMeasurementInput(otherLayoutJobStartEl,otherLayoutMeasurements.jobStart),
           taskStart:readOtherLayoutMeasurementInput(otherLayoutTaskStartEl,otherLayoutMeasurements.taskStart),
@@ -1514,6 +1546,43 @@
           updateOtherLayoutPreview(otherLayoutMeasurements);
         });
         otherOverlayTaskWidthMeasureValueEl.addEventListener('blur',function(){ updateOtherLayoutPreview(otherLayoutMeasurements); });
+      }
+      if(otherOverlayDateMeasureValueEl){
+        otherOverlayDateMeasureValueEl.addEventListener('input',function(){
+          var value=Number(otherOverlayDateMeasureValueEl.value);
+          if(!isFinite(value)||value<=0) return;
+          otherLayoutMeasurements.dateStart=otherLayoutMeasurements.left;
+          otherLayoutMeasurements.regStart=otherLayoutMeasurements.left+value;
+          updateOtherLayoutPreview(otherLayoutMeasurements);
+        });
+        otherOverlayDateMeasureValueEl.addEventListener('blur',function(){ updateOtherLayoutPreview(otherLayoutMeasurements); });
+      }
+      if(otherOverlayRegMeasureValueEl){
+        otherOverlayRegMeasureValueEl.addEventListener('input',function(){
+          var value=Number(otherOverlayRegMeasureValueEl.value);
+          if(!isFinite(value)||value<=0) return;
+          otherLayoutMeasurements.jobStart=otherLayoutMeasurements.regStart+value;
+          updateOtherLayoutPreview(otherLayoutMeasurements);
+        });
+        otherOverlayRegMeasureValueEl.addEventListener('blur',function(){ updateOtherLayoutPreview(otherLayoutMeasurements); });
+      }
+      if(otherOverlayJobMeasureValueEl){
+        otherOverlayJobMeasureValueEl.addEventListener('input',function(){
+          var value=Number(otherOverlayJobMeasureValueEl.value);
+          if(!isFinite(value)||value<=0) return;
+          otherLayoutMeasurements.taskStart=otherLayoutMeasurements.jobStart+value;
+          updateOtherLayoutPreview(otherLayoutMeasurements);
+        });
+        otherOverlayJobMeasureValueEl.addEventListener('blur',function(){ updateOtherLayoutPreview(otherLayoutMeasurements); });
+      }
+      if(otherOverlaySuperMeasureValueEl){
+        otherOverlaySuperMeasureValueEl.addEventListener('input',function(){
+          var value=Number(otherOverlaySuperMeasureValueEl.value);
+          if(!isFinite(value)||value<=0) return;
+          otherLayoutMeasurements.end=otherLayoutMeasurements.superStart+value;
+          updateOtherLayoutPreview(otherLayoutMeasurements);
+        });
+        otherOverlaySuperMeasureValueEl.addEventListener('blur',function(){ updateOtherLayoutPreview(otherLayoutMeasurements); });
       }
       [otherLayoutTopEl,otherLayoutHeaderHeightEl,otherLayoutLeftEl,otherLayoutDateStartEl,otherLayoutRegStartEl,otherLayoutJobStartEl,otherLayoutTaskStartEl,otherLayoutSuperStartEl,otherLayoutEndEl,otherLayoutRowHeightEl,otherLayoutTextTopEl,otherLayoutTextLeftEl].forEach(function(input){
         if(!input) return;
