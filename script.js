@@ -113,6 +113,7 @@
       var printOtherLayoutConfirmBtn = document.getElementById('printOtherLayoutConfirm');
       var otherLayoutPreviewEl = document.getElementById('otherLayoutPreview');
       var otherOverlayTopMeasureValueEl = document.getElementById('otherOverlayTopMeasureValue');
+      var otherOverlayRowMeasureValueEl = document.getElementById('otherOverlayRowMeasureValue');
       var otherOverlaySampleFrameEl = document.getElementById('otherOverlaySampleFrame');
       var otherOverlaySampleRowEl = document.getElementById('otherOverlaySampleRow');
       var otherOverlayTaskHeaderEl = document.getElementById('otherOverlayTaskHeader');
@@ -269,6 +270,11 @@
             otherOverlayTopMeasureValueEl.value=String(Number((measurements.top||0).toFixed(1)));
           }
         }
+        if(otherOverlayRowMeasureValueEl){
+          if(document.activeElement!==otherOverlayRowMeasureValueEl){
+            otherOverlayRowMeasureValueEl.value=String(Number((measurements.rowHeight||0).toFixed(1)));
+          }
+        }
         otherLayoutPreviewEl.style.setProperty('--preview-frame-top', pct(frameTop,pageHeight));
         otherLayoutPreviewEl.style.setProperty('--preview-frame-left', pct(measurements.left,pageWidth));
         otherLayoutPreviewEl.style.setProperty('--preview-frame-width', pct(frameWidth,pageWidth));
@@ -291,6 +297,9 @@
         var measureLeft=Math.max(0,taskRect.left-frameRect.left+(taskRect.width/2));
         otherOverlaySampleFrameEl.style.setProperty('--other-overlay-measure-height',measureHeight.toFixed(2)+'px');
         otherOverlaySampleFrameEl.style.setProperty('--other-overlay-measure-left',measureLeft.toFixed(2)+'px');
+        otherOverlaySampleFrameEl.style.setProperty('--other-overlay-row-measure-top',Math.max(0,rowRect.top-frameRect.top+1).toFixed(2)+'px');
+        otherOverlaySampleFrameEl.style.setProperty('--other-overlay-row-measure-height',Math.max(0,rowRect.height-1).toFixed(2)+'px');
+        otherOverlaySampleFrameEl.style.setProperty('--other-overlay-row-measure-left',measureLeft.toFixed(2)+'px');
       }
       function writeOtherLayoutModalValues(measurements){
         measurements=cloneMeasurementState(measurements);
@@ -1459,6 +1468,15 @@
           updateOtherLayoutPreview(otherLayoutMeasurements);
         });
         otherOverlayTopMeasureValueEl.addEventListener('blur',function(){ updateOtherLayoutPreview(otherLayoutMeasurements); });
+      }
+      if(otherOverlayRowMeasureValueEl){
+        otherOverlayRowMeasureValueEl.addEventListener('input',function(){
+          var value=Number(otherOverlayRowMeasureValueEl.value);
+          if(!isFinite(value)||value<=0) return;
+          otherLayoutMeasurements.rowHeight=value;
+          updateOtherLayoutPreview(otherLayoutMeasurements);
+        });
+        otherOverlayRowMeasureValueEl.addEventListener('blur',function(){ updateOtherLayoutPreview(otherLayoutMeasurements); });
       }
       [otherLayoutTopEl,otherLayoutHeaderHeightEl,otherLayoutLeftEl,otherLayoutDateStartEl,otherLayoutRegStartEl,otherLayoutJobStartEl,otherLayoutTaskStartEl,otherLayoutSuperStartEl,otherLayoutEndEl,otherLayoutRowHeightEl,otherLayoutTextTopEl,otherLayoutTextLeftEl].forEach(function(input){
         if(!input) return;
