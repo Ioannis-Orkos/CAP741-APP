@@ -641,8 +641,6 @@
         if(isRowSigned(row)){
           setRowSignedState(row,false,-1);
         } else {
-          if(!rowHasEntryContent(row)) { fail('Add row details before marking it as signed.'); return; }
-          if(!s(row['Approval Name'])) { fail('Set supervisor details before marking the row as signed.'); return; }
           setRowSignedState(row,true,rowSlotStartFromButton(button));
         }
         refreshUnsavedChangesState();
