@@ -54,7 +54,7 @@
       var NEW_WORKBOOK_SUPERVISOR_LICENCE = 'UK.XX.XXXXXXX';
       var NEW_WORKBOOK_TASK_TEXT = 'Dummy data test one';
       var NEW_WORKBOOK_OWNER_NAME = 'User User';
-      var OTHER_LAYOUT_DEFAULTS = { top: 37, headerHeight: 11, left: 14.5, dateStart: 14.5, regStart: 31, jobStart: 52, taskStart: 68, superStart: 142, end: 193, rowHeight: 13, textTop: 1, textLeft: 1 };
+      var OTHER_LAYOUT_DEFAULTS = { top: 37, headerHeight: 11, left: 14.5, dateStart: 14.5, regStart: 31, jobStart: 52, taskStart: 69, superStart: 142, end: 193, rowHeight: 13, textTop: 3, textLeft: 1 };
 
       // ---- DOM refs ----
       var errorBox = document.getElementById('errorBox');
@@ -122,6 +122,7 @@
       var otherOverlaySuperMeasureValueEl = document.getElementById('otherOverlaySuperMeasureValue');
       var otherOverlaySampleFrameEl = document.getElementById('otherOverlaySampleFrame');
       var otherOverlaySampleRowEl = document.getElementById('otherOverlaySampleRow');
+      var otherOverlaySampleHeaderEl = otherOverlaySampleFrameEl ? otherOverlaySampleFrameEl.querySelector('.other-overlay-row-sample-header') : null;
       var otherOverlayDateHeaderEl = document.getElementById('otherOverlayDateHeader');
       var otherOverlayRegHeaderEl = document.getElementById('otherOverlayRegHeader');
       var otherOverlayTaskHeaderEl = document.getElementById('otherOverlayTaskHeader');
@@ -272,11 +273,43 @@
         setVar('--task-width', Math.max(1,measurements.superStart-measurements.taskStart), 'mm');
         setVar('--sup-width', Math.max(1,measurements.end-measurements.superStart), 'mm');
       }
+      function pagePxToMm(pageRect, distancePx){
+        return Number(((Math.max(0,distancePx)*210)/Math.max(pageRect&&pageRect.width||0,1)).toFixed(2));
+      }
+      function currentOverlayPrintMeasurements(page){
+        if(!page||!page.getBoundingClientRect) return null;
+        var pageRect=page.getBoundingClientRect(),frame=page.querySelector('.frame'),table=page.querySelector('table.sheet');
+        if(!pageRect.width||!frame||!table||!table.tHead||!table.tHead.rows||!table.tHead.rows.length) return null;
+        var headerRow=table.tHead.rows[0],firstRow=table.tBodies&&table.tBodies[0]?table.tBodies[0].querySelector('tr.slot'):null,cells=headerRow.cells||[];
+        if(cells.length<5) return null;
+        var frameRect=frame.getBoundingClientRect(),headerRect=headerRow.getBoundingClientRect(),firstRowRect=firstRow?firstRow.getBoundingClientRect():null;
+        return {
+          top:pagePxToMm(pageRect,frameRect.top-pageRect.top),
+          headerHeight:pagePxToMm(pageRect,headerRect.height),
+          left:pagePxToMm(pageRect,frameRect.left-pageRect.left),
+          dateStart:pagePxToMm(pageRect,cells[0].getBoundingClientRect().left-pageRect.left),
+          regStart:pagePxToMm(pageRect,cells[1].getBoundingClientRect().left-pageRect.left),
+          jobStart:pagePxToMm(pageRect,cells[2].getBoundingClientRect().left-pageRect.left),
+          taskStart:pagePxToMm(pageRect,cells[3].getBoundingClientRect().left-pageRect.left),
+          superStart:pagePxToMm(pageRect,cells[4].getBoundingClientRect().left-pageRect.left),
+          end:pagePxToMm(pageRect,frameRect.right-pageRect.left),
+          rowHeight:firstRowRect?pagePxToMm(pageRect,firstRowRect.height):OTHER_LAYOUT_DEFAULTS.rowHeight,
+          textTop:0,
+          textLeft:0
+        };
+      }
+      function writeOtherLayoutPrintCssVars(page, measurements){
+        var target=document.documentElement,base=currentOverlayPrintMeasurements(page)||cloneMeasurementState(OTHER_LAYOUT_DEFAULTS);
+        measurements=cloneMeasurementState(measurements);
+        writeMeasurementCssVars('--other-layout',measurements,target);
+        target.style.setProperty('--other-layout-offset-top',String(Number((measurements.top-base.top).toFixed(2)))+'mm');
+        target.style.setProperty('--other-layout-offset-left',String(Number((measurements.left-base.left).toFixed(2)))+'mm');
+      }
       function updateOtherLayoutPreview(measurements){
         if(!otherLayoutPreviewEl) return;
         measurements=cloneMeasurementState(measurements);
         measurements.dateStart=measurements.left;
-        var pageWidth=210,pageHeight=148,frameWidth=Math.max(1,measurements.end-measurements.left),rowHeight=Math.max(.1,measurements.rowHeight),headerHeight=Math.max(.1,measurements.headerHeight),frameTop=Math.max(0,measurements.top-headerHeight),dateWidth=Math.max(0,(measurements.regStart||0)-(measurements.left||0)),regWidth=Math.max(0,(measurements.jobStart||0)-(measurements.regStart||0)),jobWidth=Math.max(0,(measurements.taskStart||0)-(measurements.jobStart||0)),taskWidth=Math.max(0,(measurements.superStart||0)-(measurements.taskStart||0)),superWidth=Math.max(0,(measurements.end||0)-(measurements.superStart||0));
+        var pageWidth=210,pageHeight=148,frameWidth=Math.max(1,measurements.end-measurements.left),rowHeight=Math.max(.1,measurements.rowHeight),headerHeight=Math.max(.1,measurements.headerHeight),frameTop=Math.max(0,measurements.top),dateWidth=Math.max(0,(measurements.regStart||0)-(measurements.left||0)),regWidth=Math.max(0,(measurements.jobStart||0)-(measurements.regStart||0)),jobWidth=Math.max(0,(measurements.taskStart||0)-(measurements.jobStart||0)),taskWidth=Math.max(0,(measurements.superStart||0)-(measurements.taskStart||0)),superWidth=Math.max(0,(measurements.end||0)-(measurements.superStart||0));
         function pct(num, den){ return (Math.max(0,num)/Math.max(.1,den)*100).toFixed(3)+'%'; }
         if(otherOverlayTopMeasureValueEl){
           if(document.activeElement!==otherOverlayTopMeasureValueEl){
@@ -331,12 +364,13 @@
         requestAnimationFrame(syncOtherOverlaySampleGuide);
       }
       function syncOtherOverlaySampleGuide(){
-        if(!otherOverlaySampleFrameEl||!otherOverlaySampleRowEl||!otherOverlayTaskHeaderEl) return;
+        if(!otherOverlaySampleFrameEl||!otherOverlaySampleHeaderEl||!otherOverlaySampleRowEl||!otherOverlayTaskHeaderEl) return;
         var frameRect=otherOverlaySampleFrameEl.getBoundingClientRect();
+        var headerRect=otherOverlaySampleHeaderEl.getBoundingClientRect();
         var rowRect=otherOverlaySampleRowEl.getBoundingClientRect();
         var taskRect=otherOverlayTaskHeaderEl.getBoundingClientRect();
-        if(!frameRect.width||!rowRect.width||!taskRect.width) return;
-        var measureHeight=Math.max(0,rowRect.top-frameRect.top+1);
+        if(!frameRect.width||!headerRect.width||!rowRect.width||!taskRect.width) return;
+        var measureHeight=Math.max(0,headerRect.top-frameRect.top+1);
         var measureLeft=Math.max(0,taskRect.left-frameRect.left+(taskRect.width/2));
         var taskStartWidth=Math.max(0,taskRect.left-frameRect.left+1);
         var taskWidth=Math.max(0,taskRect.width);
@@ -387,8 +421,8 @@
       }
       function readOtherLayoutModalValues(){
         var measurements=previewOtherLayoutMeasurements();
-        if(!(measurements.top>measurements.headerHeight)){
-          throw new Error('Top to row 1 must be greater than header height.');
+        if(!(measurements.top>=0)){
+          throw new Error('Top value must be zero or greater.');
         }
         if(!(measurements.left<=measurements.dateStart&&measurements.dateStart<measurements.regStart&&measurements.regStart<measurements.jobStart&&measurements.jobStart<measurements.taskStart&&measurements.taskStart<measurements.superStart&&measurements.superStart<measurements.end)){
           throw new Error('Layout values must increase from left edge to end edge.');
@@ -820,7 +854,7 @@
       function clearPrintSelection(){ var pages=pageElements(); document.body.classList.remove('print-current','print-current-overlay','print-current-other-layout'); for(var i=0;i<pages.length;i++) pages[i].classList.remove('print-exclude'); printMode=''; }
       function printCurrentPage(){ var current=currentVisiblePage(),pages=pageElements(); clearPrintSelection(); if(!current||!pages.length){ window.print(); return; } document.body.classList.add('print-current'); for(var i=0;i<pages.length;i++){ if(pages[i]!==current) pages[i].classList.add('print-exclude'); } printMode='current'; window.print(); }
       function printCurrentPageOverlay(){ var current=currentVisiblePage(),pages=pageElements(); clearPrintSelection(); if(!current||!pages.length){ window.print(); return; } document.body.classList.add('print-current-overlay'); for(var i=0;i<pages.length;i++){ if(pages[i]!==current) pages[i].classList.add('print-exclude'); } printMode='current-overlay'; window.print(); }
-      function printCurrentOtherLayout(){ var current=currentVisiblePage(),pages=pageElements(); clearPrintSelection(); if(!current||!pages.length){ window.print(); return; } writeMeasurementCssVars('--other-layout',otherLayoutMeasurements); document.body.classList.add('print-current-other-layout'); for(var i=0;i<pages.length;i++){ if(pages[i]!==current) pages[i].classList.add('print-exclude'); } printMode='current-other-layout'; window.print(); }
+      function printCurrentOtherLayout(){ var current=currentVisiblePage(),pages=pageElements(); clearPrintSelection(); if(!current||!pages.length){ window.print(); return; } writeOtherLayoutPrintCssVars(current,otherLayoutMeasurements); document.body.classList.add('print-current-other-layout'); for(var i=0;i<pages.length;i++){ if(pages[i]!==current) pages[i].classList.add('print-exclude'); } printMode='current-other-layout'; window.print(); }
       function printAllPages(){ clearPrintSelection(); printMode='all'; window.print(); }
       function confirmOtherLayoutPrint(){ otherLayoutMeasurements=readOtherLayoutModalValues(); closeOtherLayoutModal(); printCurrentOtherLayout(); }
 

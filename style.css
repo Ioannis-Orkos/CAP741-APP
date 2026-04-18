@@ -595,9 +595,7 @@
         visibility:hidden !important;
       }
       body.print-current-other-layout .page {
-        position:relative;
-        min-height:var(--page-h);
-        padding:0 !important;
+        --slot-h:var(--other-layout-row-height);
         page-break-after:auto;
       }
       body.print-current-other-layout .headrow,
@@ -611,10 +609,9 @@
         visibility:hidden !important;
       }
       body.print-current-other-layout .frame {
-        position:absolute !important;
-        top:calc(var(--other-layout-top) - var(--other-layout-header-height));
-        left:var(--other-layout-left);
-        width:var(--other-layout-frame-width);
+        position:relative !important;
+        top:var(--other-layout-offset-top);
+        left:var(--other-layout-offset-left);
         border:0 !important;
         background:transparent !important;
       }
@@ -630,28 +627,13 @@
         table-layout:fixed;
       }
       body.print-current-other-layout table.sheet thead th {
-        height:var(--other-layout-header-height) !important;
-        min-height:var(--other-layout-header-height) !important;
         color:transparent !important;
         -webkit-text-fill-color:transparent !important;
         text-shadow:none !important;
-        padding:0 !important;
-        line-height:0 !important;
       }
       body.print-current-other-layout table.sheet td {
-        padding:0 !important;
-        height:var(--other-layout-row-height) !important;
+        height:var(--slot-h) !important;
       }
-      body.print-current-other-layout table.sheet th:nth-child(1),
-      body.print-current-other-layout table.sheet td:nth-child(1) { width:var(--other-layout-date-width) !important; }
-      body.print-current-other-layout table.sheet th:nth-child(2),
-      body.print-current-other-layout table.sheet td:nth-child(2) { width:var(--other-layout-reg-width) !important; }
-      body.print-current-other-layout table.sheet th:nth-child(3),
-      body.print-current-other-layout table.sheet td:nth-child(3) { width:var(--other-layout-job-width) !important; }
-      body.print-current-other-layout table.sheet th:nth-child(4),
-      body.print-current-other-layout table.sheet td:nth-child(4) { width:var(--other-layout-task-width) !important; }
-      body.print-current-other-layout table.sheet th:nth-child(5),
-      body.print-current-other-layout table.sheet td:nth-child(5) { width:var(--other-layout-sup-width) !important; }
       body.print-current-other-layout .locked-cell,
       body.print-current-other-layout .locked-text,
       body.print-current-other-layout .date-cell-wrap,
@@ -664,9 +646,25 @@
       body.print-current-other-layout td > * {
         padding-top:var(--other-layout-text-top) !important;
       }
+      body.print-current-other-layout td.c-task .task-wrap {
+        display:block !important;
+        width:100% !important;
+        min-height:100% !important;
+      }
       body.print-current-other-layout td.c-task .task,
       body.print-current-other-layout td.c-sup .sup {
         padding-left:var(--other-layout-text-left) !important;
+      }
+      body.print-current-other-layout td.c-task .task {
+        display:block !important;
+        width:100% !important;
+        padding-left:.4mm !important;
+        padding-right:.4mm !important;
+      }
+      body.print-current-other-layout td.c-task .task > .editable-cell,
+      body.print-current-other-layout td.c-task .task > .locked-cell {
+        display:block !important;
+        width:100% !important;
       }
       body.print-current-other-layout .signed-row td > * {
         visibility:hidden !important;
