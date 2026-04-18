@@ -112,6 +112,10 @@
       var resetOtherLayoutDefaultsBtn = document.getElementById('resetOtherLayoutDefaults');
       var printOtherLayoutConfirmBtn = document.getElementById('printOtherLayoutConfirm');
       var otherLayoutPreviewEl = document.getElementById('otherLayoutPreview');
+      var otherOverlayTopMeasureValueEl = document.getElementById('otherOverlayTopMeasureValue');
+      var otherOverlaySampleFrameEl = document.getElementById('otherOverlaySampleFrame');
+      var otherOverlaySampleRowEl = document.getElementById('otherOverlaySampleRow');
+      var otherOverlayTaskHeaderEl = document.getElementById('otherOverlayTaskHeader');
       var otherLayoutTopEl = document.getElementById('otherLayoutTop');
       var otherLayoutHeaderHeightEl = document.getElementById('otherLayoutHeaderHeight');
       var otherLayoutLeftEl = document.getElementById('otherLayoutLeft');
@@ -260,6 +264,11 @@
         if(!otherLayoutPreviewEl) return;
         var pageWidth=210,pageHeight=148,frameWidth=Math.max(1,measurements.end-measurements.left),rowHeight=Math.max(.1,measurements.rowHeight),headerHeight=Math.max(.1,measurements.headerHeight),frameTop=Math.max(0,measurements.top-headerHeight);
         function pct(num, den){ return (Math.max(0,num)/Math.max(.1,den)*100).toFixed(3)+'%'; }
+        if(otherOverlayTopMeasureValueEl){
+          if(document.activeElement!==otherOverlayTopMeasureValueEl){
+            otherOverlayTopMeasureValueEl.value=String(Number((measurements.top||0).toFixed(1)));
+          }
+        }
         otherLayoutPreviewEl.style.setProperty('--preview-frame-top', pct(frameTop,pageHeight));
         otherLayoutPreviewEl.style.setProperty('--preview-frame-left', pct(measurements.left,pageWidth));
         otherLayoutPreviewEl.style.setProperty('--preview-frame-width', pct(frameWidth,pageWidth));
@@ -270,6 +279,18 @@
         otherLayoutPreviewEl.style.setProperty('--preview-job-width', pct(measurements.taskStart-measurements.jobStart,frameWidth));
         otherLayoutPreviewEl.style.setProperty('--preview-task-width', pct(measurements.superStart-measurements.taskStart,frameWidth));
         otherLayoutPreviewEl.style.setProperty('--preview-sup-width', pct(measurements.end-measurements.superStart,frameWidth));
+        requestAnimationFrame(syncOtherOverlaySampleGuide);
+      }
+      function syncOtherOverlaySampleGuide(){
+        if(!otherOverlaySampleFrameEl||!otherOverlaySampleRowEl||!otherOverlayTaskHeaderEl) return;
+        var frameRect=otherOverlaySampleFrameEl.getBoundingClientRect();
+        var rowRect=otherOverlaySampleRowEl.getBoundingClientRect();
+        var taskRect=otherOverlayTaskHeaderEl.getBoundingClientRect();
+        if(!frameRect.width||!rowRect.width||!taskRect.width) return;
+        var measureHeight=Math.max(0,rowRect.top-frameRect.top+1);
+        var measureLeft=Math.max(0,taskRect.left-frameRect.left+(taskRect.width/2));
+        otherOverlaySampleFrameEl.style.setProperty('--other-overlay-measure-height',measureHeight.toFixed(2)+'px');
+        otherOverlaySampleFrameEl.style.setProperty('--other-overlay-measure-left',measureLeft.toFixed(2)+'px');
       }
       function writeOtherLayoutModalValues(measurements){
         measurements=cloneMeasurementState(measurements);
@@ -317,7 +338,7 @@
       function openOtherLayoutModal(){
         writeOtherLayoutModalValues(otherLayoutMeasurements);
         if(otherLayoutModal) otherLayoutModal.className='modal-backdrop open';
-        if(otherLayoutTopEl) setTimeout(function(){ otherLayoutTopEl.focus(); if(otherLayoutTopEl.select) otherLayoutTopEl.select(); },0);
+        if(otherOverlayTopMeasureValueEl) setTimeout(function(){ otherOverlayTopMeasureValueEl.focus(); if(otherOverlayTopMeasureValueEl.select) otherOverlayTopMeasureValueEl.select(); },0);
       }
       function closeOtherLayoutModal(){ if(otherLayoutModal) otherLayoutModal.className='modal-backdrop'; }
       function rowMatchesFilters(row){ var i; if(activeFilters.aircraftType.length){ var typeMatch=false; for(i=0;i<activeFilters.aircraftType.length;i++){ if(normalizedText(aircraftLabel(row)).indexOf(normalizedText(activeFilters.aircraftType[i]))!==-1){ typeMatch=true; break; } } if(!typeMatch) return false; } if(activeFilters.aircraftReg.length){ var regMatch=false; for(i=0;i<activeFilters.aircraftReg.length;i++){ if(normalizedText(s(row['A/C Reg'])).indexOf(normalizedText(activeFilters.aircraftReg[i]))!==-1){ regMatch=true; break; } } if(!regMatch) return false; } if(activeFilters.supervisor.length){ var supervisorName=normalizedText(s(row['Approval Name'])),supervisorFull=normalizedText([s(row['Approval Name']),s(row['Approval stamp']),s(row['Aprroval Licence No.'])].filter(Boolean).join(' | ')),supervisorMatch=false; for(i=0;i<activeFilters.supervisor.length;i++){ var supervisorNeedle=normalizedText(activeFilters.supervisor[i]); if(supervisorName.indexOf(supervisorNeedle)!==-1||supervisorFull.indexOf(supervisorNeedle)!==-1){ supervisorMatch=true; break; } } if(!supervisorMatch) return false; } if(activeFilters.chapter.length){ var chapterMatch=false; for(i=0;i<activeFilters.chapter.length;i++){ var chapterNeedle=activeFilters.chapter[i]; if(chapterNeedle===BLANK_CHAPTER_FILTER){ if(!s(row['Chapter'])){ chapterMatch=true; break; } continue; } chapterNeedle=normalizedText(chapterNeedle); if(normalizedText(chapterLabelText(row)).indexOf(chapterNeedle)!==-1||normalizedText(s(row['Chapter']))===chapterNeedle){ chapterMatch=true; break; } } if(!chapterMatch) return false; } return true; }
@@ -1427,13 +1448,23 @@
       if(confirmModal) confirmModal.onclick=function(ev){ if(ev.target===confirmModal) closeConfirmDialog(false); };
       if(closeOtherLayoutModalBtn) closeOtherLayoutModalBtn.onclick=closeOtherLayoutModal;
       if(cancelOtherLayoutPrintBtn) cancelOtherLayoutPrintBtn.onclick=closeOtherLayoutModal;
-      if(resetOtherLayoutDefaultsBtn) resetOtherLayoutDefaultsBtn.onclick=function(){ otherLayoutMeasurements=cloneMeasurementState(OTHER_LAYOUT_DEFAULTS); writeOtherLayoutModalValues(otherLayoutMeasurements); if(otherLayoutTopEl) otherLayoutTopEl.focus(); };
+      if(resetOtherLayoutDefaultsBtn) resetOtherLayoutDefaultsBtn.onclick=function(){ otherLayoutMeasurements=cloneMeasurementState(OTHER_LAYOUT_DEFAULTS); writeOtherLayoutModalValues(otherLayoutMeasurements); if(otherOverlayTopMeasureValueEl) otherOverlayTopMeasureValueEl.focus(); };
       if(printOtherLayoutConfirmBtn) printOtherLayoutConfirmBtn.onclick=confirmOtherLayoutPrint;
       if(otherLayoutModal) otherLayoutModal.onclick=function(ev){ if(ev.target===otherLayoutModal) closeOtherLayoutModal(); };
+      if(otherOverlayTopMeasureValueEl){
+        otherOverlayTopMeasureValueEl.addEventListener('input',function(){
+          var value=Number(otherOverlayTopMeasureValueEl.value);
+          if(!isFinite(value)||value<=0) return;
+          otherLayoutMeasurements.top=value;
+          updateOtherLayoutPreview(otherLayoutMeasurements);
+        });
+        otherOverlayTopMeasureValueEl.addEventListener('blur',function(){ updateOtherLayoutPreview(otherLayoutMeasurements); });
+      }
       [otherLayoutTopEl,otherLayoutHeaderHeightEl,otherLayoutLeftEl,otherLayoutDateStartEl,otherLayoutRegStartEl,otherLayoutJobStartEl,otherLayoutTaskStartEl,otherLayoutSuperStartEl,otherLayoutEndEl,otherLayoutRowHeightEl,otherLayoutTextTopEl,otherLayoutTextLeftEl].forEach(function(input){
         if(!input) return;
         input.addEventListener('input',function(){ updateOtherLayoutPreview(previewOtherLayoutMeasurements()); });
       });
+      window.addEventListener('resize',function(){ if(otherLayoutModal&&otherLayoutModal.classList.contains('open')) requestAnimationFrame(syncOtherOverlaySampleGuide); });
       if(closeGoogleSheetModalBtn) closeGoogleSheetModalBtn.onclick=function(){ closeGoogleSheetModal(null); };
       if(googleSheetCancelBtn) googleSheetCancelBtn.onclick=function(){ closeGoogleSheetModal(null); };
       if(googleSheetOkBtn) googleSheetOkBtn.onclick=function(){ closeGoogleSheetModal(googleSheetInputWrapEl&&!googleSheetInputWrapEl.hidden&&googleSheetUrlInputEl?googleSheetUrlInputEl.value:true); };

@@ -74,7 +74,14 @@
       <div class="cap741-overlay-preview" id="otherLayoutPreview">
         <div class="cap741-overlay-sketch-shell other-overlay-sketch-shell">
           <div class="other-overlay-row-sample" aria-hidden="true">
-            <div class="other-overlay-row-sample-frame">
+            <div class="other-overlay-row-sample-frame" id="otherOverlaySampleFrame">
+              <div class="other-overlay-top-measure">
+                <div class="other-overlay-top-measure-track">
+                  <div class="other-overlay-top-measure-line other-overlay-top-measure-line-top"></div>
+                  <input class="other-overlay-top-measure-value" id="otherOverlayTopMeasureValue" type="number" step="0.1" min="0" value="26" aria-label="Top measurement">
+                  <div class="other-overlay-top-measure-line other-overlay-top-measure-line-bottom"></div>
+                </div>
+              </div>
               <div class="other-overlay-page-headrow">
                 <span>CAP 741</span>
                 <span>Aircraft Maintenance Engineer&apos;s Logbook</span>
@@ -103,10 +110,10 @@
                 <span>Date</span>
                 <span>A/C Reg</span>
                 <span>Job No</span>
-                <span>Task Detail</span>
+                <span id="otherOverlayTaskHeader">Task Detail</span>
                 <span>Supervisor&apos;s Name, Signature and Licence Number</span>
               </div>
-              <div class="other-overlay-row-sample-row">
+              <div class="other-overlay-row-sample-row" id="otherOverlaySampleRow">
                 <span></span>
                 <span></span>
                 <span></span>
