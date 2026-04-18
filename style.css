@@ -170,7 +170,7 @@
     .cap741-overlay-copy { margin:0 0 10px; max-width:640px; font-size:11px; line-height:1.45; color:#52697a; }
     .cap741-overlay-preview { --preview-frame-top:25%; --preview-frame-left:7%; --preview-frame-width:85%; --preview-header-height:7.5%; --preview-row-height:8%; --preview-date-width:12%; --preview-reg-width:12%; --preview-job-width:9%; --preview-task-width:41%; --preview-sup-width:26%; }
     .cap741-overlay-sketch-shell { position:relative; width:min(100%, 760px); min-height:372px; margin:0 auto; padding:18px 18px 20px; background:linear-gradient(180deg, #f8fafc 0%, #f3f6f8 100%); border:1px solid #d7dee5; border-radius:16px; overflow:hidden; }
-    .other-overlay-sketch-shell { min-height:318px; }
+    .other-overlay-sketch-shell { min-height:250px; }
     .other-overlay-window { position:relative; width:min(100%, 720px); height:332px; margin:0 auto; overflow:hidden; border-radius:12px; }
     .cap741-overlay-page-rep { position:relative; width:100%; aspect-ratio:210 / 148; background:#fff; border:1px solid #d7dee5; box-shadow:0 10px 24px rgba(32,56,79,.08); }
     .other-overlay-page-rep { transform:none; }
@@ -385,7 +385,7 @@
       .cap741-overlay-card { width:calc(100vw - 16px); padding:16px 14px 14px; }
       .cap741-overlay-copy { font-size:10px; }
       .cap741-overlay-sketch-shell { min-height:286px; padding:14px 12px 16px; }
-      .other-overlay-sketch-shell { min-height:286px; }
+      .other-overlay-sketch-shell { min-height:250px; }
       .other-overlay-window { height:296px; }
       .other-overlay-row-sample-frame { --other-overlay-header-h:20px; --other-overlay-row-h:28px; --other-overlay-measure-box-h:22px; --other-overlay-task-measure-box-w:48px; --other-overlay-task-width-measure-box-w:48px; padding:12px 12px 10px; }
       .other-overlay-top-measure { top:-1px; }
