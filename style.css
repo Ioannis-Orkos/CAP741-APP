@@ -3,6 +3,8 @@
     html, body { margin:0; padding:0; background:var(--bg); color:var(--ink); font-family:Arial, Helvetica, sans-serif; }
     body.busy { cursor:progress; }
     .error { position:fixed; top:8px; left:50%; transform:translateX(-50%); display:none; width:min(700px, calc(100vw - 24px)); background:#fff3f3; color:#8a0000; border:1px solid #b30000; box-shadow:0 12px 24px rgba(138,0,0,.12); padding:10px 14px; font-size:13px; line-height:1.4; z-index:26; }
+    .error.info { background:#eef6fb; color:#17374a; border-color:#8fb2c9; box-shadow:0 12px 24px rgba(23,55,74,.12); }
+    .error.success { background:#f1faf3; color:#184b24; border-color:#83be8e; box-shadow:0 12px 24px rgba(24,75,36,.12); }
     body.has-top-error .search-shell { top:64px; }
     .search-shell { position:fixed; top:12px; left:50%; transform:translateX(-50%); width:min(320px, calc(100vw - 136px)); z-index:24; pointer-events:none; transition:top .18s ease; }
     .search-box { display:flex; align-items:center; gap:7px; min-height:38px; padding:3px 5px 3px 10px; background:linear-gradient(180deg, rgba(255,255,255,.72) 0%, rgba(248,251,253,.68) 100%); border:1px solid rgba(201,212,221,.78); border-radius:999px; box-shadow:0 14px 28px rgba(23,55,74,.12), inset 0 1px 0 rgba(255,255,255,.45); backdrop-filter:blur(10px); pointer-events:auto; transition:border-color .18s ease, box-shadow .18s ease, transform .18s ease; }

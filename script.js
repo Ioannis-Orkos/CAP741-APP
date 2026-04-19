@@ -521,8 +521,17 @@
       function ensureGoogleClientId(interactive){ var clientId=googleClientId(); if(clientId) return clientId; if(!interactive) return ''; clientId=s(window.prompt('Enter your Google OAuth Client ID for Google Sheets access.',clientId||'')); if(clientId&&window.localStorage) window.localStorage.setItem(GOOGLE_CLIENT_ID_KEY,clientId); return clientId; }
       function shouldAutoLoadDefaultWorkbook(){ try { return window.localStorage ? window.localStorage.getItem(AUTO_LOAD_DEFAULT_KEY)!=='0' : true; } catch(e){ return true; } }
       function setAutoLoadDefaultWorkbook(enabled){ try { if(window.localStorage) window.localStorage.setItem(AUTO_LOAD_DEFAULT_KEY,enabled?'1':'0'); } catch(e){} }
-      function fail(msg){ errorBox.style.display='block'; errorBox.textContent=msg; document.body.classList.add('has-top-error'); }
-      function clearFail(){ errorBox.style.display='none'; errorBox.textContent=''; document.body.classList.remove('has-top-error'); }
+      function showTopMessage(msg, kind){
+        if(!errorBox) return;
+        errorBox.className='error'+(kind&&kind!=='error'?' '+kind:'');
+        errorBox.style.display='block';
+        errorBox.textContent=msg;
+        document.body.classList.add('has-top-error');
+      }
+      function fail(msg){ showTopMessage(msg,'error'); }
+      function note(msg){ showTopMessage(msg,'info'); }
+      function success(msg){ showTopMessage(msg,'success'); }
+      function clearFail(){ if(!errorBox) return; errorBox.style.display='none'; errorBox.textContent=''; errorBox.className='error'; document.body.classList.remove('has-top-error'); }
       function saveFailureMessage(error){ var message='Could not save: '+(error&&error.message?error.message:'Unknown error.'); if(sourceType(activeStorageSource)===STORAGE_SOURCE_GOOGLE) return message; if(message.toLowerCase().indexOf('close it in excel')===-1&&message.toLowerCase().indexOf('open in excel')===-1) message+=' If cap741-data.xlsx is open in Excel, close it and try again.'; return message; }
       async function copyTextToClipboard(text){
         if(!s(text)) return false;
@@ -1483,6 +1492,13 @@
         initializeSignedSlots(rows);
         return { addedCount:addedRows.length, skippedCount:skippedCount };
       }
+      function ultraMainImportSummary(merged){
+        merged=merged||{};
+        var addedCount=Math.max(0,Number(merged.addedCount)||0),skippedCount=Math.max(0,Number(merged.skippedCount)||0),parts=[];
+        parts.push('UltraMain import complete: '+addedCount+' imported');
+        if(skippedCount) parts.push(skippedCount+' skipped because matching Job No + Date already exists');
+        return parts.join(', ')+'.';
+      }
       async function importUltraMainForLinkedSource(){
         if(sourceType(activeStorageSource)===STORAGE_SOURCE_NONE) throw new Error('Link a main storage source first, then import data into it.');
         if(!filePickerSupported()) throw new Error('File picker not supported. Open this page via a local web server (e.g. VS Code Live Server) and use Chrome or Edge.');
@@ -1496,11 +1512,15 @@
         if(!importedRows.length) throw new Error('No UltraMain maintenance rows were found in the selected workbook.');
         var merged=mergeUltraMainRows(importedRows);
         if(!merged.addedCount){
-          if(merged.skippedCount) throw new Error('No new UltraMain entries were imported because every matching Job No + Date already exists.');
+          if(merged.skippedCount){
+            note(ultraMainImportSummary(merged));
+            return false;
+          }
           throw new Error('No UltraMain entries were imported.');
         }
         markImportedDataAsPendingSave();
         await renderAllWithLoading('Importing UltraMain','Rendering imported CAP741 pages...');
+        success(ultraMainImportSummary(merged));
         return true;
       }
       async function importProtectedAircraftForLinkedSource(){
