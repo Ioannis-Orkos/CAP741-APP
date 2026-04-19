@@ -2023,27 +2023,8 @@
         settingsDirty=true;
         refreshUnsavedChangesState();
         renderAll();
-        if(sourceType(activeStorageSource)===STORAGE_SOURCE_NONE){
-          closeSettingsModal();
-          scheduleAutoSave();
-          return;
-        }
-        setLoadingState(true,'Saving settings',sourceType(activeStorageSource)===STORAGE_SOURCE_GOOGLE?'Writing settings to Google Sheets...':'Writing settings to cap741-data.xlsx...');
-        syncSaveButtonState(true);
-        try {
-          clearFail();
-          await saveActiveStorage(true);
-          refreshUnsavedChangesState();
-          closeSettingsModal();
-          success(sourceType(activeStorageSource)===STORAGE_SOURCE_GOOGLE?'Settings saved to the linked Google Sheet.':'Settings saved to cap741-data.xlsx.');
-        } catch(e){
-          if(e&&e.name==='AbortError') fail('Settings save cancelled. Choose the storage source again and try saving once more.');
-          else fail(saveFailureMessage(e));
-          return;
-        } finally {
-          setLoadingState(false);
-          syncSaveButtonState(false);
-        }
+        closeSettingsModal();
+        scheduleAutoSave();
       }
 
       // ---- Event handlers ----
