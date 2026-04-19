@@ -1901,7 +1901,7 @@
       function openSettingsModal(){ if(!settingsModal||!settingsBodyEl) return; renderSettingsBody(settingsActiveTab); settingsModal.className='modal-backdrop open'; }
       function closeSettingsModal(){ if(settingsModal) settingsModal.className='modal-backdrop'; }
       function addSettingsRow(kind){ var tbody=settingsBodyEl&&settingsBodyEl.querySelector('[data-settings-table="'+kind+'"] tbody'); if(!tbody) return; var rowHtml=kind==='aircraft'?settingsTableRow(['<input type="text" data-col="Group" placeholder="Group">','<input type="text" data-col="A/C Reg" placeholder="G-XXXX">','<input type="text" data-col="Aircraft Type" placeholder="Boeing 777-300ER - GE90">'],kind):(kind==='chapters'?settingsTableRow(['<input type="text" data-col="Chapter" placeholder="e.g. 71">','<input type="text" data-col="Description" placeholder="e.g. Power Plant">'],kind):settingsTableRow([supervisorPrintCheckboxHtml(false),'<input type="text" data-col="Signatory Name" placeholder="Name">','<input type="text" data-col="Stamp" placeholder="Stamp">','<input type="text" data-col="License Number" placeholder="Licence No.">','<input type="text" data-col="Scope / Limitations" placeholder="Scope">'],kind)); tbody.insertAdjacentHTML('beforeend',rowHtml); tbody.lastElementChild.querySelector('input[data-col]') && tbody.lastElementChild.querySelector('input[data-col]').focus(); }
-      function saveSettingsFromModal(){
+      async function saveSettingsFromModal(){
         // Save owner info (only available on owner tab; store from DOM if on that tab, else use cached)
         var ownerNameEl=settingsBodyEl.querySelector('#settingsOwnerName');
         var ownerStampEl=settingsBodyEl.querySelector('#settingsOwnerStamp');
@@ -1918,8 +1918,27 @@
         settingsDirty=true;
         refreshUnsavedChangesState();
         renderAll();
-        closeSettingsModal();
-        scheduleAutoSave();
+        if(sourceType(activeStorageSource)===STORAGE_SOURCE_NONE){
+          closeSettingsModal();
+          scheduleAutoSave();
+          return;
+        }
+        setLoadingState(true,'Saving settings',sourceType(activeStorageSource)===STORAGE_SOURCE_GOOGLE?'Writing settings to Google Sheets...':'Writing settings to cap741-data.xlsx...');
+        syncSaveButtonState(true);
+        try {
+          clearFail();
+          await saveActiveStorage(true);
+          refreshUnsavedChangesState();
+          closeSettingsModal();
+          success(sourceType(activeStorageSource)===STORAGE_SOURCE_GOOGLE?'Settings saved to the linked Google Sheet.':'Settings saved to cap741-data.xlsx.');
+        } catch(e){
+          if(e&&e.name==='AbortError') fail('Settings save cancelled. Choose the storage source again and try saving once more.');
+          else fail(saveFailureMessage(e));
+          return;
+        } finally {
+          setLoadingState(false);
+          syncSaveButtonState(false);
+        }
       }
 
       // ---- Event handlers ----
