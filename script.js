@@ -1043,7 +1043,7 @@
       }
       async function pickWorkbookHandleTransient(){
         if(!filePickerSupported()) throw new Error('File picker not supported. Open this page via a local web server (e.g. VS Code Live Server) and use Chrome or Edge.');
-        var picked=await window.showOpenFilePicker({multiple:false,types:[{description:'CAP741 Excel workbook',accept:{'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':['.xlsx']}}],excludeAcceptAllOption:true});
+        var picked=await window.showOpenFilePicker({multiple:false,types:[{description:'Excel workbook',accept:{'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':['.xlsx']}}],excludeAcceptAllOption:true});
         var handle=picked&&picked[0];
         if(!handle) return null;
         if(!handleIsWorkbook(handle)) throw new Error('Please choose a .xlsx Excel file.');
@@ -1221,6 +1221,97 @@
         applySheetObjects(loaded.sheets);
         markImportedDataAsPendingSave();
         await renderAllWithLoading('Importing data','Rendering imported CAP741 pages...');
+        return true;
+      }
+      function compactTextKey(value){ return s(value).replace(/\s+/g,' ').toLowerCase(); }
+      function ultraMainHeaderKey(value){ return s(value).toLowerCase().replace(/[^a-z0-9]+/g,''); }
+      function ultraMainNormalizedRow(row){
+        var out=Object.create(null);
+        row=row||{};
+        for(var key in row){
+          if(!Object.prototype.hasOwnProperty.call(row,key)) continue;
+          out[ultraMainHeaderKey(key)]=row[key];
+        }
+        return out;
+      }
+      function ultraMainDateIso(value){
+        var raw=s(value),iso='';
+        if(!raw) return '';
+        iso=toIsoInputDate(raw);
+        if(iso) return iso;
+        iso=toIsoInputDate(raw.split(/[T\s]/)[0]);
+        if(iso) return iso;
+        var match=/^(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})/.exec(raw);
+        return match?isoFromDateParts(match[1],match[2],match[3]):'';
+      }
+      function ultraMainDuplicateKey(dateValue, jobNo){
+        var iso=ultraMainDateIso(dateValue),job=compactTextKey(jobNo);
+        return (iso&&job)?(iso+'||'+job):'';
+      }
+      function ultraMainWorkbookRows(workbook){
+        var out=[],sheetNames=(workbook&&workbook.SheetNames)||[];
+        for(var i=0;i<sheetNames.length;i++){
+          var records=workbookSheetObjects(workbook,sheetNames[i]);
+          if(!records.length) continue;
+          var probe=ultraMainNormalizedRow(records[0]);
+          if(!('tailnumber' in probe) || !('recordname' in probe) || !('datetime' in probe)) continue;
+          for(var j=0;j<records.length;j++){
+            var source=ultraMainNormalizedRow(records[j]);
+            var row=emptyLogRow('','','');
+            row['A/C Reg']=s(source.tailnumber).toUpperCase();
+            row['Job No']=s(source.recordname);
+            row['FAULT']=s(source.entry);
+            row['Task Detail']=s(source.comments);
+            row['Rewriten for cap741']=row['Task Detail'];
+            row['Date']=ultraMainDateIso(source.datetime)||s(source.datetime);
+            row.__signedSlot=-1;
+            fillAircraftTypeFromReg(row);
+            row=normalizeLoadedRow(row);
+            if(!rowHasEntryContent(row)) continue;
+            out.push(row);
+          }
+        }
+        return out;
+      }
+      function mergeUltraMainRows(importedRows){
+        var existingKeys=Object.create(null),addedRows=[],skippedCount=0;
+        for(var i=0;i<rows.length;i++){
+          var existingKey=ultraMainDuplicateKey(workbookDateValue(rows[i]),rows[i]['Job No']);
+          if(existingKey) existingKeys[existingKey]=true;
+        }
+        for(var j=0;j<(importedRows||[]).length;j++){
+          var importedRow=importedRows[j];
+          var importKey=ultraMainDuplicateKey(workbookDateValue(importedRow),importedRow['Job No']);
+          if(importKey&&existingKeys[importKey]){
+            skippedCount++;
+            continue;
+          }
+          if(importKey) existingKeys[importKey]=true;
+          addedRows.push(importedRow);
+        }
+        if(addedRows.length) appendRows(addedRows);
+        syncAllRowAircraftTypes();
+        initializeSignedSlots(rows);
+        return { addedCount:addedRows.length, skippedCount:skippedCount };
+      }
+      async function importUltraMainForLinkedSource(){
+        if(sourceType(activeStorageSource)===STORAGE_SOURCE_NONE) throw new Error('Link a main storage source first, then import data into it.');
+        if(!filePickerSupported()) throw new Error('File picker not supported. Open this page via a local web server (e.g. VS Code Live Server) and use Chrome or Edge.');
+        setLoadingState(true,'Importing UltraMain','Waiting for Excel file selection...');
+        var handle=await pickWorkbookHandleTransient();
+        if(!handle) return false;
+        setLoadingState(true,'Importing UltraMain','Reading UltraMain workbook...');
+        var file=await handle.getFile();
+        var workbook=XLSX.read(await file.arrayBuffer(),{type:'array'});
+        var importedRows=ultraMainWorkbookRows(workbook);
+        if(!importedRows.length) throw new Error('No UltraMain maintenance rows were found in the selected workbook.');
+        var merged=mergeUltraMainRows(importedRows);
+        if(!merged.addedCount){
+          if(merged.skippedCount) throw new Error('No new UltraMain entries were imported because every matching Job No + Date already exists.');
+          throw new Error('No UltraMain entries were imported.');
+        }
+        markImportedDataAsPendingSave();
+        await renderAllWithLoading('Importing UltraMain','Rendering imported CAP741 pages...');
         return true;
       }
       async function createNewGoogleSheet(){
@@ -1490,7 +1581,7 @@
         if(settingsActiveTab==='owner'){
           panelHtml='<div class="settings-tab-panel"><p class="settings-panel-copy">Used on the CAP 741 page footer.</p><div class="settings-grid"><div class="settings-field"><label>Name</label><input class="settings-input" id="settingsOwnerName" type="text" value="'+esc(LOG_OWNER_INFO.name)+'"></div><div class="settings-field"><label>Stamp</label><input class="settings-input" id="settingsOwnerStamp" type="text" value="'+esc(LOG_OWNER_INFO.stamp)+'"></div></div></div>';
         } else if(settingsActiveTab==='storage'){
-          panelHtml='<div class="settings-tab-panel"><p class="settings-panel-copy">See which storage source is connected, import CAP741 data from another source into it, or migrate the current data between local Excel and Google Sheets.</p><div class="settings-linked-card"><div class="settings-linked-title">Current Linked Storage</div><p class="settings-linked-copy" id="settingsStorageSummary">Checking remembered storage...</p><div class="settings-storage-link" id="settingsStorageLinkRow" hidden><a class="settings-storage-anchor" id="settingsStorageLink" href="#" target="_blank" rel="noreferrer noopener"></a><button class="settings-copy-btn" id="settingsCopyStorageLinkBtn" data-settings-copy-link="1" type="button" aria-label="Copy link" title="Copy link"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 9h9v11H9z"></path><path d="M6 4h9v3H8v9H6z"></path></svg></button></div><div class="settings-linked-note" id="settingsStorageNote">Migration copies the current in-browser data to a new source and then switches the app to that source.</div><div class="settings-storage-section"><div class="settings-storage-actions"><button class="settings-secondary-btn" id="loadStorageExcelBtn" data-settings-storage-action="import-excel" type="button">Import Excel File</button><button class="settings-secondary-btn" id="loadStorageGoogleBtn" data-settings-storage-action="import-google" type="button">Import Google Sheet</button></div></div><div class="settings-storage-section"><div class="settings-linked-title">Migrate Current Data</div><div class="settings-storage-actions"><button class="settings-secondary-btn" id="migrateToExcelBtn" data-settings-storage-action="migrate-excel" type="button">Migrate To Excel</button><button class="settings-secondary-btn" id="migrateToGoogleBtn" data-settings-storage-action="migrate-google" type="button">Migrate To Google Sheet</button><button class="settings-secondary-btn" id="unlinkWorkbookBtn" data-settings-unlink="1" type="button">Unlink Source</button></div></div></div></div>';
+          panelHtml='<div class="settings-tab-panel"><p class="settings-panel-copy">See which storage source is connected, import CAP741 data from another source into it, import UltraMain maintenance actions into the current logbook, or migrate the current data between local Excel and Google Sheets.</p><div class="settings-linked-card"><div class="settings-linked-title">Current Linked Storage</div><p class="settings-linked-copy" id="settingsStorageSummary">Checking remembered storage...</p><div class="settings-storage-link" id="settingsStorageLinkRow" hidden><a class="settings-storage-anchor" id="settingsStorageLink" href="#" target="_blank" rel="noreferrer noopener"></a><button class="settings-copy-btn" id="settingsCopyStorageLinkBtn" data-settings-copy-link="1" type="button" aria-label="Copy link" title="Copy link"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 9h9v11H9z"></path><path d="M6 4h9v3H8v9H6z"></path></svg></button></div><div class="settings-linked-note" id="settingsStorageNote">Migration copies the current in-browser data to a new source and then switches the app to that source.</div><div class="settings-storage-section"><div class="settings-storage-actions"><button class="settings-secondary-btn" id="loadStorageExcelBtn" data-settings-storage-action="import-excel" type="button">Import Excel File</button><button class="settings-secondary-btn" id="loadStorageGoogleBtn" data-settings-storage-action="import-google" type="button">Import Google Sheet</button><button class="settings-secondary-btn" id="loadStorageUltraMainBtn" data-settings-storage-action="import-ultramain" type="button">Import UltraMain Report</button></div></div><div class="settings-storage-section"><div class="settings-linked-title">Migrate Current Data</div><div class="settings-storage-actions"><button class="settings-secondary-btn" id="migrateToExcelBtn" data-settings-storage-action="migrate-excel" type="button">Migrate To Excel</button><button class="settings-secondary-btn" id="migrateToGoogleBtn" data-settings-storage-action="migrate-google" type="button">Migrate To Google Sheet</button><button class="settings-secondary-btn" id="unlinkWorkbookBtn" data-settings-unlink="1" type="button">Unlink Source</button></div></div></div></div>';
         } else if(settingsActiveTab==='aircraft'){
           panelHtml='<div class="settings-tab-panel"><p class="settings-panel-copy">Manage aircraft registration, type, and group. Registration is used to auto-fill Aircraft Type when entering A/C Reg.</p><div class="settings-panel-toolbar"><button class="settings-add-row" type="button" data-settings-add="aircraft">+ Add aircraft</button></div><div class="settings-table-wrap"><table class="settings-table" data-settings-table="aircraft"><thead><tr><th>Group</th><th>A/C Reg</th><th>Aircraft Type</th><th></th></tr></thead><tbody>'+renderSettingsRows('aircraft')+'</tbody></table></div></div>';
         } else if(settingsActiveTab==='supervisors'){
@@ -1515,9 +1606,10 @@
         var unlinkBtn=settingsBodyEl.querySelector('#unlinkWorkbookBtn');
         var loadExcelBtn=settingsBodyEl.querySelector('#loadStorageExcelBtn');
         var loadGoogleBtn=settingsBodyEl.querySelector('#loadStorageGoogleBtn');
+        var loadUltraMainBtn=settingsBodyEl.querySelector('#loadStorageUltraMainBtn');
         var migrateExcelBtn=settingsBodyEl.querySelector('#migrateToExcelBtn');
         var migrateGoogleBtn=settingsBodyEl.querySelector('#migrateToGoogleBtn');
-        if(!textEl||!unlinkBtn||!loadExcelBtn||!loadGoogleBtn||!migrateExcelBtn||!migrateGoogleBtn) return;
+        if(!textEl||!unlinkBtn||!loadExcelBtn||!loadGoogleBtn||!loadUltraMainBtn||!migrateExcelBtn||!migrateGoogleBtn) return;
         var source=loadStoredSource(),handle=await loadStoredHandle(LINKED_FILE_KEY);
         if(!settingsBodyEl.contains(textEl)) return;
         var linked=sourceType(source)===STORAGE_SOURCE_GOOGLE?!!s(source.spreadsheetId):!!(handle&&handleIsWorkbook(handle));
@@ -1545,10 +1637,11 @@
         unlinkBtn.disabled=!linked;
         loadExcelBtn.disabled=!linked;
         loadGoogleBtn.disabled=!linked;
+        loadUltraMainBtn.disabled=!linked;
         migrateExcelBtn.disabled=!hasWorkbookDataLoaded()||sourceType(activeStorageSource)===STORAGE_SOURCE_EXCEL;
         migrateGoogleBtn.disabled=!hasWorkbookDataLoaded()||sourceType(activeStorageSource)===STORAGE_SOURCE_GOOGLE;
         if(noteEl){
-          if(!linked) noteEl.textContent='Link a main storage source first. Import keeps that linked source and only replaces the in-app CAP741 data before you save.';
+          if(!linked) noteEl.textContent='Link a main storage source first. Import keeps that linked source before you save. UltraMain import adds mapped rows and skips matching Job No + Date entries.';
           else if(!hasWorkbookDataLoaded()) noteEl.textContent='Import loads CAP741 data from another source into the app but keeps the current linked source for saving.';
           else if(sourceType(activeStorageSource)===STORAGE_SOURCE_GOOGLE) noteEl.textContent='Import replaces the in-app data from another source but keeps this Google Sheet as the save target. Use "Migrate To Excel" if you want to switch to a new Excel file instead.';
           else if(sourceType(activeStorageSource)===STORAGE_SOURCE_EXCEL||sourceType(activeStorageSource)===STORAGE_SOURCE_DEFAULT) noteEl.textContent='Import replaces the in-app data from another source but keeps this Excel file as the save target. Use "Migrate To Google Sheet" if you want to switch to a new Google Sheet instead.';
@@ -1840,6 +1933,8 @@
             actionPromise=importDataFromGoogleSheetForLinkedSource();
           } else if(action==='import-excel'){
             actionPromise=importDataFromExcelForLinkedSource();
+          } else if(action==='import-ultramain'){
+            actionPromise=importUltraMainForLinkedSource();
           } else if(action==='migrate-google'){
             setLoadingState(true,'Migrating storage','Creating a Google Sheet from the current CAP741 data...');
             actionPromise=migrateCurrentDataToGoogleSheet();
