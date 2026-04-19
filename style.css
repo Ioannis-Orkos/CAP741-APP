@@ -480,13 +480,56 @@
 .settings-table th, .settings-table td { border:1px solid #d7dee5; padding:6px; text-align:left; vertical-align:top; }
 .settings-table th { background:#f3f6f8; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:#2b4a5e; position:sticky; top:0; z-index:1; }
 .settings-table td:last-child, .settings-table th:last-child { width:40px; text-align:center; }
+.settings-supervisor-print-col { width:42px; text-align:center !important; }
+.settings-print-check { display:flex; align-items:center; justify-content:center; width:100%; min-height:38px; cursor:pointer; }
+.settings-print-check input { position:absolute; opacity:0; pointer-events:none; }
+.settings-print-check span {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:20px;
+  height:20px;
+  border:1px solid #c8d2da;
+  border-radius:5px;
+  background:#fff;
+  color:transparent;
+  font:700 12px/1 Arial, Helvetica, sans-serif;
+}
+.settings-print-check input:checked + span {
+  border-color:#1d425a;
+  background:#17374a;
+  color:#fff;
+}
 .settings-table button, .settings-add-row { min-height:34px; border:1px solid #c8d2da; background:#fff; color:#17374a; padding:0 12px; font-size:12px; font-weight:700; cursor:pointer; }
 .settings-table button:hover, .settings-add-row:hover { background:#f3f6f8; }
 .settings-remove-btn { min-height:28px !important; min-width:28px; padding:0 !important; font-size:14px !important; color:#8a0000 !important; border-color:#e8c5c5 !important; }
 .settings-remove-btn:hover { background:#fff0f0 !important; }
-.settings-footer { margin-top:16px; display:flex; justify-content:flex-end; }
+.settings-footer { margin-top:16px; display:flex; justify-content:flex-end; align-items:center; gap:10px; }
 .settings-save { min-height:42px; border:1px solid #1d425a; background:#17374a; color:#fff; padding:0 16px; font-size:13px; font-weight:700; cursor:pointer; }
 .settings-save:hover { background:#1a3f56; }
+.supervisor-print-host { display:none; }
+.supervisor-list-page .title { margin-bottom:10px; }
+.supervisor-list-sheet .c-name { width:34%; }
+.supervisor-list-sheet .c-signature { width:22%; }
+.supervisor-list-sheet .c-licence { width:22%; }
+.supervisor-list-sheet .c-stamp { width:22%; }
+.supervisor-list-sheet td { height:9mm; vertical-align:middle; padding-top:0; padding-bottom:0; }
+.supervisor-list-sheet thead th { font-size:12.2px; }
+.supervisor-list-sheet td.c-name { text-align:center; font-size:9.4px; font-weight:400; letter-spacing:.01em; }
+.supervisor-list-sheet td.c-licence { text-align:center; font-size:8.8px; }
+.supervisor-list-sheet td.c-signature,
+.supervisor-list-sheet td.c-stamp { text-align:center; }
+.supervisor-list-name {
+  min-height:9mm;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  line-height:1.05;
+  font-family:"Trebuchet MS", Arial, Helvetica, sans-serif;
+  font-weight:400;
+}
+.supervisor-list-licence { min-height:9mm; display:flex; align-items:center; justify-content:center; line-height:1.05; }
+.supervisor-list-sheet .blank-line { display:block; width:100%; min-height:1em; }
     .empty-state { width:min(var(--page-w), calc(100vw - 24px)); margin:16px auto 20px; padding:22px 24px; background:linear-gradient(135deg, #ffffff 0%, #f5f9fc 100%); border:1px solid #c7d5e0; box-shadow:0 10px 24px rgba(23,55,74,.1); }
     .empty-state-blank { min-height:calc(100vh - 150px); display:flex; align-items:center; justify-content:center; margin:0 auto 20px; padding:24px; background:transparent; border:0; box-shadow:none; }
     .empty-state-title { font-size:20px; font-weight:700; color:#122a39; margin:0 0 8px; }
@@ -732,6 +775,52 @@
       body.print-current-other-layout .declaration-star,
       body.print-current-other-layout .declaration-text {
         visibility:hidden !important;
+      }
+      body.print-supervisor-list > :not(.supervisor-print-host) {
+        display:none !important;
+      }
+      body.print-supervisor-list .supervisor-print-host {
+        display:block !important;
+      }
+      body.print-supervisor-list .supervisor-print-host .page {
+        width:var(--page-w);
+        min-height:var(--page-h);
+        margin:0 auto;
+        box-shadow:none;
+        padding:4.5mm 14mm 4.5mm 14mm;
+        page-break-after:always;
+      }
+      body.print-supervisor-list .supervisor-list-page .headrow {
+        margin-bottom:2px !important;
+        font-size:8px !important;
+      }
+      body.print-supervisor-list .supervisor-list-page .title {
+        margin:2px 0 6px !important;
+        font-size:15px !important;
+        line-height:1.05 !important;
+      }
+      body.print-supervisor-list .supervisor-list-page .owner-row {
+        margin-top:6px !important;
+        font-size:9px !important;
+      }
+      body.print-supervisor-list .supervisor-list-page .bottomline {
+        margin-top:10px !important;
+      }
+      body.print-supervisor-list .supervisor-list-sheet thead th {
+        font-size:12.8px !important;
+        line-height:1.05 !important;
+        padding-top:3px !important;
+        padding-bottom:3px !important;
+      }
+      body.print-supervisor-list .supervisor-list-sheet td {
+        height:8.2mm !important;
+      }
+      body.print-supervisor-list .supervisor-list-name,
+      body.print-supervisor-list .supervisor-list-licence {
+        min-height:8.2mm !important;
+      }
+      body.print-supervisor-list .supervisor-print-host .page:last-child {
+        page-break-after:auto;
       }
     }
 
