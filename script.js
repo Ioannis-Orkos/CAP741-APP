@@ -54,7 +54,7 @@
       var NEW_WORKBOOK_SUPERVISOR_LICENCE = 'UK.XX.XXXXXXX';
       var NEW_WORKBOOK_TASK_TEXT = 'Dummy data test one';
       var NEW_WORKBOOK_OWNER_NAME = 'User User';
-      var OTHER_LAYOUT_DEFAULTS = { top: 37, headerHeight: 11, left: 14.5, dateStart: 14.5, regStart: 31, jobStart: 52, taskStart: 69, superStart: 142, end: 193, rowHeight: 13, textTop: 3, textLeft: 1 };
+      var OTHER_LAYOUT_DEFAULTS = { top: 36, headerHeight: 11, left: 14.5, dateStart: 14.5, regStart: 31.5, jobStart: 53.5, taskStart: 69, superStart: 142, end: 193, rowHeight: 13, textTop: 3, textLeft: 1 };
 
       // ---- DOM refs ----
       var errorBox = document.getElementById('errorBox');
@@ -259,7 +259,7 @@
         target=target||document.documentElement;
         measurements=cloneMeasurementState(measurements);
         measurements.dateStart=measurements.left;
-        function setVar(name, value, unit){ target.style.setProperty(prefix+name,String(value)+(unit||'')); }
+        function setVar(name, value, unit){ target.style.setProperty(prefix+String(name).replace(/^--/,'-'),String(value)+(unit||'')); }
         setVar('--top', measurements.top, 'mm');
         setVar('--header-height', measurements.headerHeight, 'mm');
         setVar('--left', measurements.left, 'mm');
@@ -299,11 +299,9 @@
         };
       }
       function writeOtherLayoutPrintCssVars(page, measurements){
-        var target=document.documentElement,base=currentOverlayPrintMeasurements(page)||cloneMeasurementState(OTHER_LAYOUT_DEFAULTS);
+        var target=document.documentElement;
         measurements=cloneMeasurementState(measurements);
         writeMeasurementCssVars('--other-layout',measurements,target);
-        target.style.setProperty('--other-layout-offset-top',String(Number((measurements.top-base.top).toFixed(2)))+'mm');
-        target.style.setProperty('--other-layout-offset-left',String(Number((measurements.left-base.left).toFixed(2)))+'mm');
       }
       function updateOtherLayoutPreview(measurements){
         if(!otherLayoutPreviewEl) return;
@@ -368,12 +366,13 @@
         var frameRect=otherOverlaySampleFrameEl.getBoundingClientRect();
         var headerRect=otherOverlaySampleHeaderEl.getBoundingClientRect();
         var rowRect=otherOverlaySampleRowEl.getBoundingClientRect();
-        var taskRect=otherOverlayTaskHeaderEl.getBoundingClientRect();
+        var taskCell=otherOverlaySampleRowEl.children&&otherOverlaySampleRowEl.children[3]?otherOverlaySampleRowEl.children[3]:null;
+        var taskRect=taskCell?taskCell.getBoundingClientRect():otherOverlayTaskHeaderEl.getBoundingClientRect();
         if(!frameRect.width||!headerRect.width||!rowRect.width||!taskRect.width) return;
-        var measureHeight=Math.max(0,headerRect.top-frameRect.top+1);
+        var measureHeight=Math.max(0,rowRect.top-frameRect.top+1);
         var measureLeft=Math.max(0,taskRect.left-frameRect.left+(taskRect.width/2));
         var taskStartWidth=Math.max(0,taskRect.left-frameRect.left+1);
-        var taskWidth=Math.max(0,taskRect.width);
+        var taskWidth=Math.max(0,taskRect.width-1);
         otherOverlaySampleFrameEl.style.setProperty('--other-overlay-measure-height',measureHeight.toFixed(2)+'px');
         otherOverlaySampleFrameEl.style.setProperty('--other-overlay-measure-left',measureLeft.toFixed(2)+'px');
         otherOverlaySampleFrameEl.style.setProperty('--other-overlay-row-measure-top',Math.max(0,rowRect.top-frameRect.top+1).toFixed(2)+'px');
