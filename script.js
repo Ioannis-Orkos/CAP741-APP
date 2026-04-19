@@ -1696,7 +1696,7 @@
         AIRCRAFT_GROUP_ROWS=starterAircraft?[starterAircraft]:[];
         AIRCRAFT_MAP=starterAircraft?(function(){ var map=Object.create(null); map[starterAircraft.reg]=starterAircraft.type; return map; })():Object.create(null);
         CHAPTER_OPTIONS=[];
-        LOG_OWNER_INFO={ name:NEW_WORKBOOK_OWNER_NAME, signature:NEW_WORKBOOK_OWNER_NAME, stamp:NEW_WORKBOOK_OWNER_NAME };
+        LOG_OWNER_INFO={ name:NEW_WORKBOOK_OWNER_NAME, signature:'', stamp:NEW_WORKBOOK_OWNER_NAME };
         activeFilters=emptyFilterState();
         draftFilters=emptyFilterState();
         applySearchQuery('');
