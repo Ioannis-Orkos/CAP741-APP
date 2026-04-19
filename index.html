@@ -4,10 +4,15 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CAP 741 Section 3.1</title>
-  <link rel="stylesheet" href="style.css?v=20260418b" />
+  <link rel="stylesheet" href="style.css?v=20260419d" />
 </head>
 <body>
-  <div class="error" id="errorBox"></div>
+  <div class="error" id="errorBox" role="status" aria-live="polite">
+    <div class="error-inner">
+      <div class="error-text" id="errorText"></div>
+      <button class="error-ok" id="errorOkBtn" data-top-message-dismiss="1" type="button">OK</button>
+    </div>
+  </div>
   <div class="loading-overlay" id="loadingOverlay" aria-hidden="true">
     <div class="loading-card" role="status" aria-live="polite">
       <div class="loading-head">
@@ -236,6 +241,6 @@
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
   <script src="data.js?v=20260419c"></script>
-  <script src="script.js?v=20260419c"></script>
+  <script src="script.js?v=20260419d"></script>
 </body>
 </html>

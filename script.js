@@ -59,6 +59,8 @@
 
       // ---- DOM refs ----
       var errorBox = document.getElementById('errorBox');
+      var errorTextEl = document.getElementById('errorText');
+      var errorOkBtn = document.getElementById('errorOkBtn');
       var loadingOverlay = document.getElementById('loadingOverlay');
       var loadingTitleEl = document.getElementById('loadingTitle');
       var loadingTextEl = document.getElementById('loadingText');
@@ -525,13 +527,14 @@
         if(!errorBox) return;
         errorBox.className='error'+(kind&&kind!=='error'?' '+kind:'');
         errorBox.style.display='block';
-        errorBox.textContent=msg;
+        if(errorTextEl) errorTextEl.textContent=msg;
+        else errorBox.textContent=msg;
         document.body.classList.add('has-top-error');
       }
       function fail(msg){ showTopMessage(msg,'error'); }
       function note(msg){ showTopMessage(msg,'info'); }
       function success(msg){ showTopMessage(msg,'success'); }
-      function clearFail(){ if(!errorBox) return; errorBox.style.display='none'; errorBox.textContent=''; errorBox.className='error'; document.body.classList.remove('has-top-error'); }
+      function clearFail(){ if(!errorBox) return; errorBox.style.display='none'; if(errorTextEl) errorTextEl.textContent=''; else errorBox.textContent=''; errorBox.className='error'; document.body.classList.remove('has-top-error'); }
       function saveFailureMessage(error){ var message='Could not save: '+(error&&error.message?error.message:'Unknown error.'); if(sourceType(activeStorageSource)===STORAGE_SOURCE_GOOGLE) return message; if(message.toLowerCase().indexOf('close it in excel')===-1&&message.toLowerCase().indexOf('open in excel')===-1) message+=' If cap741-data.xlsx is open in Excel, close it and try again.'; return message; }
       async function copyTextToClipboard(text){
         if(!s(text)) return false;
@@ -2159,6 +2162,10 @@
       if(closeSettingsModalBtn) closeSettingsModalBtn.onclick=closeSettingsModal;
       if(saveSettingsBtn) saveSettingsBtn.onclick=saveSettingsFromModal;
       if(printSupervisorsBtn) printSupervisorsBtn.onclick=printSupervisorList;
+      if(errorOkBtn) errorOkBtn.onclick=function(ev){ if(ev) ev.stopPropagation(); clearFail(); };
+      if(errorBox) errorBox.addEventListener('click',function(ev){
+        if(!(ev.target&&ev.target.closest&&ev.target.closest('.error-ok'))) clearFail();
+      });
       if(settingsModal) settingsModal.onclick=function(ev){ if(ev.target===settingsModal) closeSettingsModal(); };
       if(settingsBodyEl) settingsBodyEl.addEventListener('click',function(ev){
         var unlink=ev.target.closest&&ev.target.closest('[data-settings-unlink]');
