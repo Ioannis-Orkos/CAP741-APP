@@ -145,6 +145,7 @@
       var googleSheetModalTitleEl = document.getElementById('googleSheetModalTitle');
       var googleSheetModalCopyEl = document.getElementById('googleSheetModalCopy');
       var googleSheetInputWrapEl = document.getElementById('googleSheetInputWrap');
+      var googleSheetInputLabelEl = document.getElementById('googleSheetInputLabel');
       var googleSheetUrlInputEl = document.getElementById('googleSheetUrlInput');
       var googleSheetResultRowEl = document.getElementById('googleSheetResultRow');
       var googleSheetResultLinkEl = document.getElementById('googleSheetResultLink');
@@ -562,11 +563,14 @@
           if(googleSheetModalTitleEl) googleSheetModalTitleEl.textContent=options.title||'Google Sheet';
           if(googleSheetModalCopyEl) googleSheetModalCopyEl.textContent=options.copy||'';
           if(googleSheetModalNoteEl) googleSheetModalNoteEl.textContent=options.note||'';
+          if(googleSheetInputLabelEl) googleSheetInputLabelEl.textContent=options.label||'Sheet URL or ID';
           if(googleSheetInputWrapEl){
             googleSheetInputWrapEl.hidden=!options.input;
             googleSheetInputWrapEl.style.display=options.input?'grid':'none';
           }
           if(googleSheetUrlInputEl){
+            googleSheetUrlInputEl.type=options.inputType||'text';
+            googleSheetUrlInputEl.autocomplete=options.autocomplete||'off';
             googleSheetUrlInputEl.value=options.input?(options.value||''):'';
             googleSheetUrlInputEl.placeholder=options.placeholder||'Paste Google Sheet URL or ID';
           }
@@ -618,6 +622,76 @@
           hideCancel:true
         });
       }
+      function protectedDataStore(){ return window.CAP741_PROTECTED_DATA||null; }
+      function protectedPayloadValue(payload){ return typeof payload==='string' ? s(payload) : s(payload&&payload.cipher); }
+      function protectedDataAvailable(){
+        var store=protectedDataStore();
+        if(!store) return false;
+        if(s(store.scheme)==='pbkdf2-aes-cbc-v1') return !!(protectedPayloadValue(store.aircraftPayload)&&protectedPayloadValue(store.supervisorPayload)&&s(store.passwordSalt)&&s(store.passwordVerifier));
+        return !!(store&&s(store.password)&&protectedPayloadValue(store.aircraftPayload)&&protectedPayloadValue(store.supervisorPayload));
+      }
+      function decodeProtectedPayload(payload, key){
+        var text=s(payload),pass=s(key);
+        if(!text||!pass) throw new Error('Protected data could not be decoded.');
+        var raw=window.atob(text),passCodes=[],i,decodedBytes,decoder;
+        for(i=0;i<pass.length;i++) passCodes.push(pass.charCodeAt(i));
+        decodedBytes=new Uint8Array(raw.length);
+        for(i=0;i<raw.length;i++) decodedBytes[i]=raw.charCodeAt(i)^passCodes[i%passCodes.length];
+        if(window.TextDecoder){
+          decoder=new TextDecoder('utf-8');
+          return decoder.decode(decodedBytes);
+        }
+        var out='';
+        for(i=0;i<decodedBytes.length;i++) out+=String.fromCharCode(decodedBytes[i]);
+        try { return decodeURIComponent(escape(out)); } catch(e){ return out; }
+      }
+      function bytesFromBase64(text){
+        var raw=window.atob(s(text)),bytes=new Uint8Array(raw.length),i;
+        for(i=0;i<raw.length;i++) bytes[i]=raw.charCodeAt(i);
+        return bytes;
+      }
+      function bytesFromUtf8(text){ return window.TextEncoder ? new TextEncoder().encode(String(text==null?'':text)) : new Uint8Array(unescape(encodeURIComponent(String(text==null?'':text))).split('').map(function(ch){ return ch.charCodeAt(0); })); }
+      function concatBytes(a, b){ var left=a instanceof Uint8Array?a:new Uint8Array(a||[]),right=b instanceof Uint8Array?b:new Uint8Array(b||[]),out=new Uint8Array(left.length+right.length); out.set(left,0); out.set(right,left.length); return out; }
+      function bytesEqual(a, b){ var left=a instanceof Uint8Array?a:new Uint8Array(a||[]),right=b instanceof Uint8Array?b:new Uint8Array(b||[]),i,diff=0; if(left.length!==right.length) return false; for(i=0;i<left.length;i++) diff|=(left[i]^right[i]); return diff===0; }
+      async function sha256Bytes(bytes){
+        if(!window.crypto||!window.crypto.subtle) throw new Error('Secure protected data import requires a modern browser.');
+        return new Uint8Array(await window.crypto.subtle.digest('SHA-256',bytes));
+      }
+      async function deriveProtectedMasterBytes(password, saltBase64, iterations){
+        if(!window.crypto||!window.crypto.subtle) throw new Error('Secure protected data import requires a modern browser.');
+        var baseKey=await window.crypto.subtle.importKey('raw',bytesFromUtf8(password),{name:'PBKDF2'},false,['deriveBits']);
+        return new Uint8Array(await window.crypto.subtle.deriveBits({name:'PBKDF2',salt:bytesFromBase64(saltBase64),iterations:Number(iterations)||200000,hash:'SHA-256'},baseKey,256));
+      }
+      async function protectedVerifierBytes(masterBytes){ return await sha256Bytes(concatBytes(masterBytes,bytesFromUtf8('verify'))); }
+      async function protectedEncryptionKey(masterBytes){
+        var keyBytes=await sha256Bytes(concatBytes(masterBytes,bytesFromUtf8('encrypt')));
+        return await window.crypto.subtle.importKey('raw',keyBytes,{name:'AES-CBC'},false,['decrypt']);
+      }
+      async function decodeProtectedPayloadV2(payload, password, store){
+        var masterBytes=await deriveProtectedMasterBytes(password,store.passwordSalt,store.kdfIterations);
+        var expected=bytesFromBase64(store.passwordVerifier);
+        var actual=await protectedVerifierBytes(masterBytes);
+        if(!bytesEqual(actual,expected)) throw new Error('Incorrect password.');
+        var key=await protectedEncryptionKey(masterBytes);
+        var plainBuffer=await window.crypto.subtle.decrypt({name:'AES-CBC',iv:bytesFromBase64(payload&&payload.iv)},key,bytesFromBase64(payload&&payload.cipher));
+        if(window.TextDecoder) return new TextDecoder('utf-8').decode(new Uint8Array(plainBuffer));
+        var out='',decodedBytes=new Uint8Array(plainBuffer),i;
+        for(i=0;i<decodedBytes.length;i++) out+=String.fromCharCode(decodedBytes[i]);
+        try { return decodeURIComponent(escape(out)); } catch(e){ return out; }
+      }
+      async function requestProtectedImportPassword(kindLabel){
+        return await showGoogleSheetModal({
+          title:'Unlock Protected '+kindLabel,
+          copy:'Enter the password to import the protected '+kindLabel.toLowerCase()+' data into this logbook.',
+          note:'This imports the prefilled reference data from the protected local data.js file.',
+          input:true,
+          inputType:'password',
+          label:'Password',
+          placeholder:'Enter password',
+          okLabel:'Import',
+          autocomplete:'current-password'
+        });
+      }
       function filePickerSupported(){ return typeof window.showOpenFilePicker==='function'; }
       function fileSavePickerSupported(){ return typeof window.showSaveFilePicker==='function'; }
       function syncLoadButtonAvailability(isLinked){ if(isLinked){ setLoadButtonMode('hidden'); return; } setLoadButtonMode(hasWorkbookDataLoaded()?'link':'load'); }
@@ -652,6 +726,44 @@
       function rowById(id){ return rowsById[String(id)]||null; }
       function removeRowById(id){ var key=String(id); delete rowsById[key]; for(var i=rows.length-1;i>=0;i--){ if(String(rows[i].__rowId)===key){ rows.splice(i,1); break; } } }
       function rowsByGroupKey(key){ var out=[]; for(var i=0;i<rows.length;i++){ var row=rows[i]; if((aircraftLabel(row)+'||'+s(row['Chapter']))===key) out.push(row); } return out; }
+      function aircraftReferenceRecordForReg(reg){
+        reg=s(reg).toUpperCase();
+        if(!reg) return null;
+        for(var i=0;i<(AIRCRAFT_GROUP_ROWS||[]).length;i++){
+          var item=AIRCRAFT_GROUP_ROWS[i]||{};
+          if(s(item.reg).toUpperCase()===reg) return item;
+        }
+        return null;
+      }
+      function aircraftGroupForType(type){
+        type=s(type);
+        if(!type) return '';
+        for(var i=0;i<(AIRCRAFT_GROUP_ROWS||[]).length;i++){
+          var item=AIRCRAFT_GROUP_ROWS[i]||{};
+          if(s(item.type)===type && s(item.group)) return s(item.group);
+        }
+        return '';
+      }
+      function upsertAircraftReferenceRecord(reg, type, preferredGroup){
+        reg=s(reg).toUpperCase();
+        type=s(type);
+        preferredGroup=s(preferredGroup);
+        if(!reg || !type) return null;
+        var existing=aircraftReferenceRecordForReg(reg);
+        if(existing){
+          existing.type=type;
+          if(preferredGroup) existing.group=preferredGroup;
+          else if(!s(existing.group)) existing.group=aircraftGroupForType(type);
+          AIRCRAFT_MAP[reg]=type;
+          markSharedDatalistsDirty();
+          return existing;
+        }
+        var record={ group:preferredGroup||aircraftGroupForType(type), reg:reg, type:type };
+        AIRCRAFT_GROUP_ROWS.push(record);
+        AIRCRAFT_MAP[reg]=type;
+        markSharedDatalistsDirty();
+        return record;
+      }
       function fillAircraftTypeFromReg(row){ if(!row) return row; var reg=s(row['A/C Reg']).toUpperCase(); if(reg) row['A/C Reg']=reg; if(!s(row['Aircraft Type'])&&reg&&AIRCRAFT_MAP[reg]) row['Aircraft Type']=AIRCRAFT_MAP[reg]; return row; }
       function randomBaAircraftRecord(){
         var matches=[];
@@ -1223,6 +1335,83 @@
         await renderAllWithLoading('Importing data','Rendering imported CAP741 pages...');
         return true;
       }
+      function cleanProtectedAircraftRecord(record){
+        record=record||{};
+        return { group:s(record.group), reg:s(record.reg).toUpperCase(), type:s(record.type) };
+      }
+      function cleanProtectedSupervisorRecord(record){
+        record=record||{};
+        return { id:s(record.id), name:s(record.name), stamp:s(record.stamp), licence:s(record.licence), scope:s(record.scope), date:s(record.date) };
+      }
+      async function protectedRecordsFromStore(kind, password){
+        var store=protectedDataStore(),payload='',decoded='';
+        if(!store) throw new Error('Protected import data is not available.');
+        payload=kind==='aircraft'?store.aircraftPayload:store.supervisorPayload;
+        if(!protectedPayloadValue(payload)) throw new Error('Protected '+kind+' data is not available.');
+        if(s(store.scheme)==='pbkdf2-aes-cbc-v1'){
+          decoded=await decodeProtectedPayloadV2(payload,password,store);
+        } else {
+          if(s(password)!==s(store.password)) throw new Error('Incorrect password.');
+          decoded=decodeProtectedPayload(payload, password);
+        }
+        return JSON.parse(decoded||'[]');
+      }
+      function importProtectedAircraftRecords(records){
+        var addedCount=0,updatedCount=0,filledCount=0,i,beforeType,beforeGroup,existing,row,clean,updated;
+        for(i=0;i<(records||[]).length;i++){
+          clean=cleanProtectedAircraftRecord(records[i]);
+          if(!clean.reg||!clean.type) continue;
+          existing=aircraftReferenceRecordForReg(clean.reg);
+          beforeType=existing?s(existing.type):'';
+          beforeGroup=existing?s(existing.group):'';
+          upsertAircraftReferenceRecord(clean.reg,clean.type,clean.group);
+          if(existing){
+            updated=aircraftReferenceRecordForReg(clean.reg);
+            if(beforeType!==s(updated&&updated.type)||beforeGroup!==s(updated&&updated.group)) updatedCount++;
+          } else addedCount++;
+        }
+        for(i=0;i<rows.length;i++){
+          row=rows[i];
+          beforeType=s(row['Aircraft Type']);
+          if(beforeType) continue;
+          fillAircraftTypeFromReg(row);
+          if(s(row['Aircraft Type'])&&!beforeType) filledCount++;
+        }
+        markSharedDatalistsDirty();
+        return { addedCount:addedCount, updatedCount:updatedCount, filledCount:filledCount };
+      }
+      function mergeProtectedSupervisorRecords(records){
+        var merged=SUPERVISOR_RECORDS.map(function(item){ return { id:s(item.id), name:s(item.name), stamp:s(item.stamp), licence:s(item.licence), scope:s(item.scope), date:s(item.date) }; });
+        var byId=Object.create(null),byName=Object.create(null),addedCount=0,updatedCount=0,i,clean,target,before;
+        function reindex(record){
+          if(s(record.id)) byId[s(record.id)]=record;
+          if(s(record.name)) byName[normalizedText(record.name)]=record;
+        }
+        for(i=0;i<merged.length;i++) reindex(merged[i]);
+        for(i=0;i<(records||[]).length;i++){
+          clean=cleanProtectedSupervisorRecord(records[i]);
+          if(!clean.name) continue;
+          target=(clean.id&&byId[clean.id])||byName[normalizedText(clean.name)]||null;
+          if(target){
+            before=JSON.stringify(target);
+            target.id=clean.id||target.id;
+            target.name=clean.name||target.name;
+            target.stamp=clean.stamp||target.stamp;
+            target.licence=clean.licence||target.licence;
+            target.scope=clean.scope||target.scope;
+            target.date=clean.date||target.date;
+            if(before!==JSON.stringify(target)) updatedCount++;
+            reindex(target);
+            continue;
+          }
+          merged.push(clean);
+          reindex(clean);
+          addedCount++;
+        }
+        rebuildSupervisorState(merged);
+        markSharedDatalistsDirty();
+        return { addedCount:addedCount, updatedCount:updatedCount };
+      }
       function compactTextKey(value){ return s(value).replace(/\s+/g,' ').toLowerCase(); }
       function ultraMainHeaderKey(value){ return s(value).toLowerCase().replace(/[^a-z0-9]+/g,''); }
       function ultraMainNormalizedRow(row){
@@ -1312,6 +1501,28 @@
         }
         markImportedDataAsPendingSave();
         await renderAllWithLoading('Importing UltraMain','Rendering imported CAP741 pages...');
+        return true;
+      }
+      async function importProtectedAircraftForLinkedSource(){
+        if(sourceType(activeStorageSource)===STORAGE_SOURCE_NONE) throw new Error('Link a main storage source first, then import data into it.');
+        if(!protectedDataAvailable()) throw new Error('Protected aircraft data is not available.');
+        var password=await requestProtectedImportPassword('Aircraft Data');
+        if(password==null) return false;
+        var result=importProtectedAircraftRecords(await protectedRecordsFromStore('aircraft',password));
+        if(!(result.addedCount||result.updatedCount||result.filledCount)) throw new Error('No aircraft data changes were imported.');
+        markImportedDataAsPendingSave();
+        await renderAllWithLoading('Importing aircraft data','Updating aircraft references and filling empty CAP741 aircraft types...');
+        return true;
+      }
+      async function importProtectedSupervisorsForLinkedSource(){
+        if(sourceType(activeStorageSource)===STORAGE_SOURCE_NONE) throw new Error('Link a main storage source first, then import data into it.');
+        if(!protectedDataAvailable()) throw new Error('Protected supervisor data is not available.');
+        var password=await requestProtectedImportPassword('Supervisor Data');
+        if(password==null) return false;
+        var result=mergeProtectedSupervisorRecords(await protectedRecordsFromStore('supervisors',password));
+        if(!(result.addedCount||result.updatedCount)) throw new Error('No supervisor data changes were imported.');
+        markImportedDataAsPendingSave();
+        await renderAllWithLoading('Importing supervisors','Updating the protected supervisor list...');
         return true;
       }
       async function createNewGoogleSheet(){
@@ -1581,7 +1792,7 @@
         if(settingsActiveTab==='owner'){
           panelHtml='<div class="settings-tab-panel"><p class="settings-panel-copy">Used on the CAP 741 page footer.</p><div class="settings-grid"><div class="settings-field"><label>Name</label><input class="settings-input" id="settingsOwnerName" type="text" value="'+esc(LOG_OWNER_INFO.name)+'"></div><div class="settings-field"><label>Stamp</label><input class="settings-input" id="settingsOwnerStamp" type="text" value="'+esc(LOG_OWNER_INFO.stamp)+'"></div></div></div>';
         } else if(settingsActiveTab==='storage'){
-          panelHtml='<div class="settings-tab-panel"><p class="settings-panel-copy">See which storage source is connected, import CAP741 data from another source into it, import UltraMain maintenance actions into the current logbook, or migrate the current data between local Excel and Google Sheets.</p><div class="settings-linked-card"><div class="settings-linked-title">Current Linked Storage</div><p class="settings-linked-copy" id="settingsStorageSummary">Checking remembered storage...</p><div class="settings-storage-link" id="settingsStorageLinkRow" hidden><a class="settings-storage-anchor" id="settingsStorageLink" href="#" target="_blank" rel="noreferrer noopener"></a><button class="settings-copy-btn" id="settingsCopyStorageLinkBtn" data-settings-copy-link="1" type="button" aria-label="Copy link" title="Copy link"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 9h9v11H9z"></path><path d="M6 4h9v3H8v9H6z"></path></svg></button></div><div class="settings-linked-note" id="settingsStorageNote">Migration copies the current in-browser data to a new source and then switches the app to that source.</div><div class="settings-storage-section"><div class="settings-storage-actions"><button class="settings-secondary-btn" id="loadStorageExcelBtn" data-settings-storage-action="import-excel" type="button">Import Excel File</button><button class="settings-secondary-btn" id="loadStorageGoogleBtn" data-settings-storage-action="import-google" type="button">Import Google Sheet</button><button class="settings-secondary-btn" id="loadStorageUltraMainBtn" data-settings-storage-action="import-ultramain" type="button">Import UltraMain Report</button></div></div><div class="settings-storage-section"><div class="settings-linked-title">Migrate Current Data</div><div class="settings-storage-actions"><button class="settings-secondary-btn" id="migrateToExcelBtn" data-settings-storage-action="migrate-excel" type="button">Migrate To Excel</button><button class="settings-secondary-btn" id="migrateToGoogleBtn" data-settings-storage-action="migrate-google" type="button">Migrate To Google Sheet</button><button class="settings-secondary-btn" id="unlinkWorkbookBtn" data-settings-unlink="1" type="button">Unlink Source</button></div></div></div></div>';
+          panelHtml='<div class="settings-tab-panel"><p class="settings-panel-copy">See which storage source is connected, import CAP741 data from another source into it, import UltraMain maintenance actions into the current logbook, load protected prefilled aircraft and supervisor data, or migrate the current data between local Excel and Google Sheets.</p><div class="settings-linked-card"><div class="settings-linked-title">Current Linked Storage</div><p class="settings-linked-copy" id="settingsStorageSummary">Checking remembered storage...</p><div class="settings-storage-link" id="settingsStorageLinkRow" hidden><a class="settings-storage-anchor" id="settingsStorageLink" href="#" target="_blank" rel="noreferrer noopener"></a><button class="settings-copy-btn" id="settingsCopyStorageLinkBtn" data-settings-copy-link="1" type="button" aria-label="Copy link" title="Copy link"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 9h9v11H9z"></path><path d="M6 4h9v3H8v9H6z"></path></svg></button></div><div class="settings-linked-note" id="settingsStorageNote">Migration copies the current in-browser data to a new source and then switches the app to that source.</div><div class="settings-storage-section"><div class="settings-storage-actions"><button class="settings-secondary-btn" id="loadStorageExcelBtn" data-settings-storage-action="import-excel" type="button">Import Excel File</button><button class="settings-secondary-btn" id="loadStorageGoogleBtn" data-settings-storage-action="import-google" type="button">Import Google Sheet</button><button class="settings-secondary-btn" id="loadStorageUltraMainBtn" data-settings-storage-action="import-ultramain" type="button">Import UltraMain Report</button><button class="settings-secondary-btn" id="loadProtectedAircraftBtn" data-settings-storage-action="import-protected-aircraft" type="button">Load Prefilled A/C Data</button><button class="settings-secondary-btn" id="loadProtectedSupervisorsBtn" data-settings-storage-action="import-protected-supervisors" type="button">Load Prefilled Supervisors</button></div></div><div class="settings-storage-section"><div class="settings-linked-title">Migrate Current Data</div><div class="settings-storage-actions"><button class="settings-secondary-btn" id="migrateToExcelBtn" data-settings-storage-action="migrate-excel" type="button">Migrate To Excel</button><button class="settings-secondary-btn" id="migrateToGoogleBtn" data-settings-storage-action="migrate-google" type="button">Migrate To Google Sheet</button><button class="settings-secondary-btn" id="unlinkWorkbookBtn" data-settings-unlink="1" type="button">Unlink Source</button></div></div></div></div>';
         } else if(settingsActiveTab==='aircraft'){
           panelHtml='<div class="settings-tab-panel"><p class="settings-panel-copy">Manage aircraft registration, type, and group. Registration is used to auto-fill Aircraft Type when entering A/C Reg.</p><div class="settings-panel-toolbar"><button class="settings-add-row" type="button" data-settings-add="aircraft">+ Add aircraft</button></div><div class="settings-table-wrap"><table class="settings-table" data-settings-table="aircraft"><thead><tr><th>Group</th><th>A/C Reg</th><th>Aircraft Type</th><th></th></tr></thead><tbody>'+renderSettingsRows('aircraft')+'</tbody></table></div></div>';
         } else if(settingsActiveTab==='supervisors'){
@@ -1607,9 +1818,11 @@
         var loadExcelBtn=settingsBodyEl.querySelector('#loadStorageExcelBtn');
         var loadGoogleBtn=settingsBodyEl.querySelector('#loadStorageGoogleBtn');
         var loadUltraMainBtn=settingsBodyEl.querySelector('#loadStorageUltraMainBtn');
+        var loadProtectedAircraftBtn=settingsBodyEl.querySelector('#loadProtectedAircraftBtn');
+        var loadProtectedSupervisorsBtn=settingsBodyEl.querySelector('#loadProtectedSupervisorsBtn');
         var migrateExcelBtn=settingsBodyEl.querySelector('#migrateToExcelBtn');
         var migrateGoogleBtn=settingsBodyEl.querySelector('#migrateToGoogleBtn');
-        if(!textEl||!unlinkBtn||!loadExcelBtn||!loadGoogleBtn||!loadUltraMainBtn||!migrateExcelBtn||!migrateGoogleBtn) return;
+        if(!textEl||!unlinkBtn||!loadExcelBtn||!loadGoogleBtn||!loadUltraMainBtn||!loadProtectedAircraftBtn||!loadProtectedSupervisorsBtn||!migrateExcelBtn||!migrateGoogleBtn) return;
         var source=loadStoredSource(),handle=await loadStoredHandle(LINKED_FILE_KEY);
         if(!settingsBodyEl.contains(textEl)) return;
         var linked=sourceType(source)===STORAGE_SOURCE_GOOGLE?!!s(source.spreadsheetId):!!(handle&&handleIsWorkbook(handle));
@@ -1638,10 +1851,13 @@
         loadExcelBtn.disabled=!linked;
         loadGoogleBtn.disabled=!linked;
         loadUltraMainBtn.disabled=!linked;
+        loadProtectedAircraftBtn.disabled=!linked||!protectedDataAvailable();
+        loadProtectedSupervisorsBtn.disabled=!linked||!protectedDataAvailable();
         migrateExcelBtn.disabled=!hasWorkbookDataLoaded()||sourceType(activeStorageSource)===STORAGE_SOURCE_EXCEL;
         migrateGoogleBtn.disabled=!hasWorkbookDataLoaded()||sourceType(activeStorageSource)===STORAGE_SOURCE_GOOGLE;
         if(noteEl){
           if(!linked) noteEl.textContent='Link a main storage source first. Import keeps that linked source before you save. UltraMain import adds mapped rows and skips matching Job No + Date entries.';
+          else if(!protectedDataAvailable()) noteEl.textContent='Protected prefilled aircraft and supervisor data is not available. The regular import and migration actions still work normally.';
           else if(!hasWorkbookDataLoaded()) noteEl.textContent='Import loads CAP741 data from another source into the app but keeps the current linked source for saving.';
           else if(sourceType(activeStorageSource)===STORAGE_SOURCE_GOOGLE) noteEl.textContent='Import replaces the in-app data from another source but keeps this Google Sheet as the save target. Use "Migrate To Excel" if you want to switch to a new Excel file instead.';
           else if(sourceType(activeStorageSource)===STORAGE_SOURCE_EXCEL||sourceType(activeStorageSource)===STORAGE_SOURCE_DEFAULT) noteEl.textContent='Import replaces the in-app data from another source but keeps this Excel file as the save target. Use "Migrate To Google Sheet" if you want to switch to a new Google Sheet instead.';
@@ -1935,6 +2151,10 @@
             actionPromise=importDataFromExcelForLinkedSource();
           } else if(action==='import-ultramain'){
             actionPromise=importUltraMainForLinkedSource();
+          } else if(action==='import-protected-aircraft'){
+            actionPromise=importProtectedAircraftForLinkedSource();
+          } else if(action==='import-protected-supervisors'){
+            actionPromise=importProtectedSupervisorsForLinkedSource();
           } else if(action==='migrate-google'){
             setLoadingState(true,'Migrating storage','Creating a Google Sheet from the current CAP741 data...');
             actionPromise=migrateCurrentDataToGoogleSheet();
