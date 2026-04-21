@@ -87,11 +87,16 @@
     .slot td { height:var(--slot-h); }
     .sheet td.c-date, .sheet td.c-reg, .sheet td.c-job { text-align:center; vertical-align:middle; }
     .task, .sup { white-space:pre-wrap; word-break:break-word; }
-    .task-wrap { position:relative; min-height:100%; }
-    .task-wrap .task { padding-right:0; }
-    .slot.merged-slot td.c-task { vertical-align:middle; }
-    .slot.merged-slot .task-wrap { display:flex; align-items:center; }
-    .slot.merged-slot .task-wrap .task { width:100%; }
+    .sheet td.c-task { vertical-align:top; overflow:hidden; }
+    .task-wrap { position:relative; width:100%; height:100%; min-height:100%; display:flex; align-items:flex-start; overflow:hidden; }
+    .task-wrap .task { flex:1 1 auto; min-width:0; height:100%; display:flex; align-items:flex-start; padding-right:0; }
+    .task-wrap .task > .editable-cell,
+    .task-wrap .task > .locked-cell { display:block; width:100%; max-height:100%; overflow:hidden; box-sizing:border-box; }
+    .task-wrap.task-wrap-four-lines { align-items:center; }
+    .task-wrap.task-wrap-four-lines .task { align-items:center; }
+    .slot.merged-slot td.c-task { vertical-align:top; }
+    .slot.merged-slot .task-wrap { display:flex; align-items:flex-start; height:100%; overflow:hidden; }
+    .slot.merged-slot .task-wrap .task { flex:1 1 auto; min-width:0; height:100%; }
     .task-expand { position:absolute; top:0; right:0; z-index:2; width:16px; height:16px; padding:0; border:1px solid rgba(102,102,102,.65); background:rgba(255,255,255,.62); color:#111; cursor:pointer; font:11px/14px Arial, Helvetica, sans-serif; text-align:center; }
     .task-expand:hover { background:rgba(255,255,255,.85); }
     .sheet td.c-date { position:relative; overflow:visible; }
@@ -115,9 +120,9 @@
     .editable-cell:focus { background:#fffbe8; box-shadow:inset 0 0 0 1px #d3a300; }
     .task-input { text-align:left; white-space:pre-wrap; }
     .locked-cell { min-height:1.2em; white-space:pre-wrap; word-break:break-word; color:#102836; }
-    .locked-text { background:rgba(244,248,251,.92); border-radius:4px; }
+    .locked-text { background:transparent; border-radius:4px; }
     .date-locked { text-align:center; }
-    .signed-row td { background:rgba(248,251,253,.62); }
+    .signed-row td { background:transparent; }
     .declaration-row td { padding:4px 6px 6px; font-size:10.6px; line-height:1.15; text-align:left; vertical-align:top; font-family:Arial, Helvetica, sans-serif; }
     .declaration { display:grid; grid-template-columns:5px minmax(0, 1fr) auto; column-gap:0px; align-items:start; width:100%; }
     .declaration-star { font-size:11px; font-weight:700; line-height:1.3; }

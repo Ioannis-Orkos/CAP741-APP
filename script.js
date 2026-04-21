@@ -30,8 +30,11 @@
       var AIRCRAFT_GROUP_ROWS = [];
       var SUPERVISOR_RECORDS = [];
       var PAGE_SLOTS = 6;
-      var ROW_TASK_CHARS = 60;
-      var ROW_LINES_PER_SLOT = 5;
+      var ROW_TASK_LINES_PER_SLOT = 4;
+      var TASK_TEXT_MEASURE_WIDTH_FALLBACK_PX = 318;
+      var TASK_TEXT_LINE_HEIGHT_FALLBACK_PX = 9.44;
+      var taskTextMeasureEl = null;
+      var taskTextMeasureCache = null;
       var DB_NAME = 'cap741-file-handles';
       var DB_STORE = 'handles';
       var LINKED_FILE_KEY = 'cap741-main-file';
@@ -919,15 +922,106 @@
       function modalAircraftRegDatalistHtml(type){ return '<datalist id="'+modalAircraftRegListId()+'">'+aircraftOptionsHtmlForType(type)+'</datalist>'; }
 
       // ---- Render helpers ----
-      function linesFor(text, width){ var t=s(text); if(!t) return 1; var parts=t.split(/\r?\n/); var n=0; for(var i=0;i<parts.length;i++) n+=Math.max(1,Math.ceil(parts[i].length/Math.max(1,width))); return n; }
       function mainPageTaskText(row){ return s(row['Rewriten for cap741']||row['Task Detail']); }
-      function unitsFor(row){ var key=mainPageTaskText(row||{}); if(row&&row.__unitsCacheKey===key&&typeof row.__unitsCacheValue==='number') return row.__unitsCacheValue; var task=linesFor(key,ROW_TASK_CHARS),base=Math.max(task,2),value=Math.max(1,Math.min(PAGE_SLOTS,Math.ceil(base/ROW_LINES_PER_SLOT))); if(row){ row.__unitsCacheKey=key; row.__unitsCacheValue=value; } return value; }
+      function taskTextMeasureSample(){ return pagesEl&&pagesEl.querySelector?pagesEl.querySelector('.sheet td.c-task .task-wrap .task > .editable-cell, .sheet td.c-task .task-wrap .task > .locked-cell'):null; }
+      function taskTextMeasureMetrics(){
+        if(taskTextMeasureCache) return taskTextMeasureCache;
+        var sample=taskTextMeasureSample(),width=TASK_TEXT_MEASURE_WIDTH_FALLBACK_PX,lineHeight=TASK_TEXT_LINE_HEIGHT_FALLBACK_PX,fontFamily='Arial, Helvetica, sans-serif',fontSize='8px',fontWeight='400',fontStyle='normal',fontVariant='normal',letterSpacing='normal';
+        if(sample&&window.getComputedStyle){
+          var computed=window.getComputedStyle(sample),sampleRect=sample.getBoundingClientRect();
+          width=(sampleRect&&sampleRect.width)||sample.clientWidth||width;
+          lineHeight=parseFloat(computed.lineHeight)||lineHeight;
+          fontFamily=computed.fontFamily||fontFamily;
+          fontSize=computed.fontSize||fontSize;
+          fontWeight=computed.fontWeight||fontWeight;
+          fontStyle=computed.fontStyle||fontStyle;
+          fontVariant=computed.fontVariant||fontVariant;
+          letterSpacing=computed.letterSpacing||letterSpacing;
+        }
+        width=Math.max(1,width);
+        lineHeight=Math.max(1,lineHeight);
+        taskTextMeasureCache={
+          width:width,
+          lineHeight:lineHeight,
+          fontFamily:fontFamily,
+          fontSize:fontSize,
+          fontWeight:fontWeight,
+          fontStyle:fontStyle,
+          fontVariant:fontVariant,
+          letterSpacing:letterSpacing,
+          signature:[Math.round(width*100)/100,lineHeight,fontFamily,fontSize,fontWeight,fontStyle,fontVariant,letterSpacing,ROW_TASK_LINES_PER_SLOT].join('|')
+        };
+        return taskTextMeasureCache;
+      }
+      function ensureTaskTextMeasureEl(){
+        if(taskTextMeasureEl||!document||!document.body) return taskTextMeasureEl;
+        taskTextMeasureEl=document.createElement('div');
+        taskTextMeasureEl.setAttribute('aria-hidden','true');
+        taskTextMeasureEl.style.position='absolute';
+        taskTextMeasureEl.style.left='-9999px';
+        taskTextMeasureEl.style.top='0';
+        taskTextMeasureEl.style.visibility='hidden';
+        taskTextMeasureEl.style.pointerEvents='none';
+        taskTextMeasureEl.style.padding='0';
+        taskTextMeasureEl.style.border='0';
+        taskTextMeasureEl.style.margin='0';
+        taskTextMeasureEl.style.whiteSpace='pre-wrap';
+        taskTextMeasureEl.style.wordBreak='break-word';
+        taskTextMeasureEl.style.overflowWrap='break-word';
+        taskTextMeasureEl.style.boxSizing='border-box';
+        document.body.appendChild(taskTextMeasureEl);
+        return taskTextMeasureEl;
+      }
+      function taskLinesFor(text){
+        var t=s(text);
+        if(!t) return 1;
+        var measureEl=ensureTaskTextMeasureEl(),metrics=taskTextMeasureMetrics();
+        if(!measureEl) return Math.max(1,Math.ceil(t.length/64));
+        measureEl.style.width=Math.max(1,Math.round(metrics.width))+'px';
+        measureEl.style.lineHeight=metrics.lineHeight+'px';
+        measureEl.style.fontFamily=metrics.fontFamily;
+        measureEl.style.fontSize=metrics.fontSize;
+        measureEl.style.fontWeight=metrics.fontWeight;
+        measureEl.style.fontStyle=metrics.fontStyle;
+        measureEl.style.fontVariant=metrics.fontVariant;
+        measureEl.style.letterSpacing=metrics.letterSpacing;
+        measureEl.textContent=t;
+        var measuredHeight=measureEl.scrollHeight||measureEl.getBoundingClientRect().height||metrics.lineHeight;
+        measureEl.textContent='';
+        return Math.max(1,Math.round(measuredHeight/metrics.lineHeight));
+      }
+      function taskLineCountForRow(row){
+        var key=mainPageTaskText(row||{}),metrics=taskTextMeasureMetrics(),cacheKey=metrics.signature+'||'+key;
+        if(row&&row.__taskLineCountCacheKey===cacheKey&&typeof row.__taskLineCount==='number') return row.__taskLineCount;
+        var lineCount=taskLinesFor(key);
+        if(row){
+          row.__taskLineCountCacheKey=cacheKey;
+          row.__taskLineCount=lineCount;
+        }
+        return lineCount;
+      }
+      function unitsFor(row){
+        var key=mainPageTaskText(row||{}),metrics=taskTextMeasureMetrics(),cacheKey=metrics.signature+'||'+key;
+        if(row&&row.__unitsCacheKey===cacheKey&&typeof row.__unitsCacheValue==='number') return row.__unitsCacheValue;
+        var lineCount=taskLineCountForRow(row),value=Math.max(1,Math.min(PAGE_SLOTS,Math.ceil(lineCount/Math.max(1,ROW_TASK_LINES_PER_SLOT))));
+        if(row){
+          row.__unitsCacheKey=cacheKey;
+          row.__unitsCacheValue=value;
+        }
+        return value;
+      }
+      function taskWrapClassName(row){
+        var classes=['task-wrap'],lineCount=taskLineCountForRow(row),units=unitsFor(row);
+        if(isRowSigned(row)) classes.push('task-wrap-locked');
+        if(units===1&&lineCount===ROW_TASK_LINES_PER_SLOT) classes.push('task-wrap-four-lines');
+        return classes.join(' ');
+      }
       function dotsInputSize(value){ return Math.max(8,Math.min(56,s(value).length+1)); }
       function renderDotsInput(value, extraAttrs){ return '<span class="dots-value"><input class="field-input dots-input" type="text" size="'+dotsInputSize(value)+'" value="'+esc(value||'')+'"'+(extraAttrs||'')+'></span>'; }
       function syncDotsInputSize(input){ if(!input||!input.classList||!input.classList.contains('dots-input')) return; input.size=dotsInputSize(valueOf(input)); }
       function editableTextInput(field, rowId, value, placeholder, extraClass, listId){ return '<input class="field-input '+(extraClass||'')+'" type="text"'+(listId?' list="'+listId+'"':'')+' data-row-id="'+rowId+'" data-edit-field="'+field+'" value="'+esc(value||'')+'"'+(placeholder?' placeholder="'+esc(placeholder)+'"':'')+'>';}
       function editableCell(field, rowId, value, cls){ return '<div class="editable-cell '+(cls||'')+'" contenteditable="true" data-row-id="'+rowId+'" data-edit-field="'+field+'">'+(esc(value)||'&nbsp;')+'</div>'; }
-      function staticTextCell(value, cls){ return '<div class="'+(cls||'locked-cell')+'">'+(esc(value)||'&nbsp;')+'</div>'; }
+      function staticTextCell(value, cls){ return '<div class="locked-cell'+(cls?' '+cls:'')+'">'+(esc(value)||'&nbsp;')+'</div>'; }
       function placeholderCellHtml(extraClass){ return '<div class="'+(extraClass||'placeholder-cell')+'">&nbsp;</div>'; }
       function rowLockIconSvg(signed){
         if(signed) return '<svg viewBox="0 0 24 24" class="row-lock-icon" aria-hidden="true" focusable="false"><path d="M7 10V8a5 5 0 1 1 10 0v2h1a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h1Zm2 0h6V8a3 3 0 1 0-6 0v2Z" fill="currentColor"/></svg>';
@@ -951,7 +1045,7 @@
           : dateControlHtml(' data-row-id="'+row.__rowId+'" data-edit-field="Date"',DATE_PLACEHOLDER,formatDateDisplay(row['Date']),toIsoInputDate(row['Date']));
         return '<div class="date-cell-wrap">'+signToggleButtonHtml(row)+dateContent+'</div>';
       }
-      function taskCellHtml(row){ if(isRowSigned(row)) return '<div class="task-wrap task-wrap-locked"><div class="task">'+staticTextCell(mainPageTaskText(row),'task-input locked-text')+'</div></div>'; return '<div class="task-wrap"><div class="task">'+editableCell('Rewriten for cap741',row.__rowId,mainPageTaskText(row),'task-input')+'</div><button class="task-expand" type="button" data-open-task="1" data-row-id="'+row.__rowId+'" aria-label="Show full task detail">&#x2197;</button></div>'; }
+      function taskCellHtml(row){ var wrapClass=taskWrapClassName(row); if(isRowSigned(row)) return '<div class="'+wrapClass+'"><div class="task">'+staticTextCell(mainPageTaskText(row),'task-input locked-text')+'</div></div>'; return '<div class="'+wrapClass+'"><div class="task">'+editableCell('Rewriten for cap741',row.__rowId,mainPageTaskText(row),'task-input')+'</div><button class="task-expand" type="button" data-open-task="1" data-row-id="'+row.__rowId+'" aria-label="Show full task detail">&#x2197;</button></div>'; }
       function blankTaskCellHtml(type, chapter, chapterDesc, regListId){ return '<div class="task-wrap"><div class="task">'+blankEditableCell('Rewriten for cap741',type,chapter,chapterDesc,regListId)+'</div><button class="task-expand" type="button" data-open-task-new="1" aria-label="Show full task detail">&#x2197;</button></div>'; }
       function dateControlHtml(extraAttrs, placeholder, displayValue, isoValue){ return '<div class="date-entry"><input class="field-input date-text" type="text" data-date-text="1" placeholder="'+(placeholder||DATE_PLACEHOLDER)+'" value="'+esc(displayValue||'')+('"'+extraAttrs)+'><input class="date-native" type="date" data-date-picker="1" value="'+esc(isoValue||'')+'"></div>'; }
       // Rows are grouped exactly how the printed logbook is grouped: one section
@@ -1061,7 +1155,7 @@
       }
       // Main UI render pass. This rebuilds the visible pages from the current in-memory
       // state instead of diffing small DOM fragments, which keeps layout logic simpler.
-      function renderAll(){ try { syncFilterButtonState(); syncSearchUi(); renderFilterStrip(); var activeRows=nonEmptyRows(rows),visibleRows=activeRows.filter(function(row){ return rowMatchesSearch(row)&&(!hasActiveFilters()||rowMatchesFilters(row)); }),preserveFilteredSlots=shouldPreserveFilteredRowSlots(); if(!visibleRows.length){ syncSharedDatalists(sharedDatalistsHtml()); pagesEl.innerHTML=renderEmptyState(); return; } var renderedGroups=buildRenderedGroups(activeRows,visibleRows),html=[]; syncSharedDatalists(sharedDatalistsHtml()+renderedGroupDatalistsHtml(renderedGroups)); for(var i=0;i<renderedGroups.length;i++){ var group=renderedGroups[i].group,pages=renderedGroups[i].pages; for(var j=0;j<pages.length;j++){ var pageKey=(group.type+'||'+group.chapter+'||'+pages[j].map(function(item){ return item.row.__rowId; }).join('-')); html.push(renderDataPage(group,pages[j],pageKey,preserveFilteredSlots)); } } pagesEl.innerHTML=html.join(''); } catch(e){ fail('Could not render pages: '+e.message); } }
+      function renderAll(){ try { taskTextMeasureCache=null; syncFilterButtonState(); syncSearchUi(); renderFilterStrip(); var activeRows=nonEmptyRows(rows),visibleRows=activeRows.filter(function(row){ return rowMatchesSearch(row)&&(!hasActiveFilters()||rowMatchesFilters(row)); }),preserveFilteredSlots=shouldPreserveFilteredRowSlots(); if(!visibleRows.length){ syncSharedDatalists(sharedDatalistsHtml()); pagesEl.innerHTML=renderEmptyState(); return; } var renderedGroups=buildRenderedGroups(activeRows,visibleRows),html=[]; syncSharedDatalists(sharedDatalistsHtml()+renderedGroupDatalistsHtml(renderedGroups)); for(var i=0;i<renderedGroups.length;i++){ var group=renderedGroups[i].group,pages=renderedGroups[i].pages; for(var j=0;j<pages.length;j++){ var pageKey=(group.type+'||'+group.chapter+'||'+pages[j].map(function(item){ return item.row.__rowId; }).join('-')); html.push(renderDataPage(group,pages[j],pageKey,preserveFilteredSlots)); } } pagesEl.innerHTML=html.join(''); } catch(e){ fail('Could not render pages: '+e.message); } }
       async function renderAllWithLoading(title, text){ setLoadingState(true,title||'Loading logbook',text||'Rendering logbook pages...'); await nextPaint(); renderAll(); }
 
       // ---- Modal editor ----
