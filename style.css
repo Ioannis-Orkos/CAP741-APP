@@ -563,6 +563,10 @@
         box-shadow:none;
         padding:5.5mm 17mm 5.5mm 17mm;
       }
+      table.sheet th,
+      table.sheet td {
+        border-width:.6px;
+      }
       .sheet tbody tr.slot { break-inside:avoid; page-break-inside:avoid; }
       .field-input, .field-select, .editable-cell, .dots-line .dots-value {
         border:0 !important;
