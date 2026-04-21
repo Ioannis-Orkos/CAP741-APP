@@ -602,8 +602,13 @@
       .date-native {
         display:none !important;
       }
+      body.print-current .page {
+        page-break-after:auto;
+        break-after:auto;
+      }
       body.print-current-overlay .page {
         page-break-after:auto;
+        break-after:auto;
       }
       body.print-current-overlay .headrow,
       body.print-current-overlay .topline,
@@ -655,6 +660,7 @@
         --slot-h:var(--other-layout-row-height);
         padding:0 !important;
         page-break-after:auto;
+        break-after:auto;
       }
       body.print-current-other-layout .headrow,
       body.print-current-other-layout .topline,
