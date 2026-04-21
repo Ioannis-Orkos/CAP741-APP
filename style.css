@@ -65,7 +65,7 @@
     .topline, .bottomline { border-top:1px solid var(--line); height:0; }
     .headrow { display:flex; justify-content:space-between; align-items:flex-end; font-size:8.5px; margin-bottom:3px; }
     .title { font-size:17px; font-weight:700; margin:3px 0 9px; line-height:1.1; }
-    .dots-row { display:grid; grid-template-columns:1.38fr .95fr; gap:12px; align-items:start; margin-bottom:6px; font-size:9.5px; }
+    .dots-row { display:grid; grid-template-columns:1.38fr .95fr; gap:12px; align-items:start; margin-bottom:6px; font-size:12px; }
     .dots-field { display:flex; align-items:baseline; gap:8px; white-space:nowrap; }
     .dots-label { flex:0 0 auto; }
     .dots-line { flex:1 1 auto; border-bottom:1px dotted #222; height:1.15em; min-width:30px; position:relative; overflow:visible; }
@@ -74,7 +74,7 @@
     .editable-dots-line { cursor:text; }
     .editable-dots-line .dots-value { left:50%; right:auto; transform:translateX(-50%); max-width:100%; padding:0 .45ch; }
     .editable-dots-line .dots-input { width:auto; min-width:8ch; max-width:100%; text-align:center; cursor:text; }
-    .subnote { font-size:7.5px; line-height:1.05; margin:0; }
+    .subnote { font-size:10px; line-height:1.05; margin:0; }
     .field-stack { display:flex; flex-direction:column; }
     .field-stack.top-pad { padding-top:1px; }
     .frame { border:0; }
@@ -127,7 +127,7 @@
     .declaration { display:grid; grid-template-columns:5px minmax(0, 1fr) auto; column-gap:0px; align-items:start; width:100%; }
     .declaration-star { font-size:11px; font-weight:700; line-height:1.3; }
     .declaration-text { min-width:0; white-space:normal; font-size:11.5px; }
-    .owner-row { display:grid; grid-template-columns:1.02fr .98fr; gap:12px; align-items:end; margin-top:8px; font-size:9.5px; }
+    .owner-row { position:relative; top:8px; display:grid; grid-template-columns:1.02fr .98fr; gap:12px; align-items:end; margin-top:8px; font-size:12px; }
     .owner-row .dots-field { gap:6px; }
     .owner-row .dots-line > span { font-size:11.4px; font-weight:400; }
     .footer-id { text-align:right; margin-top:5px; font-size:8px; }
