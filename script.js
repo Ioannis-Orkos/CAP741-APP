@@ -1825,9 +1825,11 @@
       // ---- Row model ----
       function emptyLogRow(type, chapter, chapterDesc){ return {__rowId:nextRowId(),'Aircraft Type':s(type),'A/C Reg':'','Chapter':s(chapter),'Chapter Description':s(chapterDesc),'Date':'','Job No':'','FAULT':'','Task Detail':'','Rewriten for cap741':'','Approval Name':'','Approval stamp':'','Aprroval Licence No.':'','Signed':'',__trackedComparablePresent:false}; }
       function rowHasEntryContent(row){ return !!(s(row['Date'])||s(row['A/C Reg'])||s(row['Job No'])||s(row['FAULT'])||s(row['Task Detail'])||s(row['Rewriten for cap741'])||s(row['Approval Name'])||s(row['Approval stamp'])||s(row['Aprroval Licence No.'])); }
+      function rowHasWorkbookContent(row){ return !!(rowHasEntryContent(row)||s(row['Aircraft Type'])||s(row['Chapter'])||s(row['Chapter Description'])); }
       function nonEmptyRows(list){ var out=[]; for(var i=0;i<(list||[]).length;i++){ if(rowHasEntryContent(list[i]||{})) out.push(list[i]); } return out; }
-      function normalizeRows(list){ list=nonEmptyRows(list); rowsById=Object.create(null); var max=-1; for(var i=0;i<list.length;i++){ var id=Number(list[i].__rowId); if(!isFinite(id)||id<0) id=i; list[i].__rowId=id; list[i]['Signed']=isRowSigned(list[i])?'true':''; if(!isFinite(Number(list[i].__signedSlot))) list[i].__signedSlot=-1; list[i].__trackedComparablePresent=rowHasEntryContent(list[i]); rowsById[String(id)]=list[i]; if(id>max) max=id; } nextRowIdValue=max+1; return list; }
-      function appendRows(list){ for(var i=0;i<list.length;i++){ var row=list[i]; var id=Number(row.__rowId); if(!isFinite(id)||id<0) id=nextRowId(); if(id>=nextRowIdValue) nextRowIdValue=id+1; row.__rowId=id; row.__trackedComparablePresent=rowHasEntryContent(row); rowsById[String(id)]=row; rows.push(row); } rebuildDataDirtyTracking(); }
+      function workbookContentRows(list){ var out=[]; for(var i=0;i<(list||[]).length;i++){ if(rowHasWorkbookContent(list[i]||{})) out.push(list[i]); } return out; }
+      function normalizeRows(list){ list=workbookContentRows(list); rowsById=Object.create(null); var max=-1; for(var i=0;i<list.length;i++){ var id=Number(list[i].__rowId); if(!isFinite(id)||id<0) id=i; list[i].__rowId=id; list[i]['Signed']=isRowSigned(list[i])?'true':''; if(!isFinite(Number(list[i].__signedSlot))) list[i].__signedSlot=-1; list[i].__trackedComparablePresent=rowHasWorkbookContent(list[i]); rowsById[String(id)]=list[i]; if(id>max) max=id; } nextRowIdValue=max+1; return list; }
+      function appendRows(list){ for(var i=0;i<list.length;i++){ var row=list[i]; var id=Number(row.__rowId); if(!isFinite(id)||id<0) id=nextRowId(); if(id>=nextRowIdValue) nextRowIdValue=id+1; row.__rowId=id; row.__trackedComparablePresent=rowHasWorkbookContent(row); rowsById[String(id)]=row; rows.push(row); } rebuildDataDirtyTracking(); }
       function nextRowId(){ return nextRowIdValue++; }
       function rowById(id){ return rowsById[String(id)]||null; }
       function removeRowById(id){ var key=String(id); delete rowsById[key]; for(var i=rows.length-1;i>=0;i--){ if(String(rows[i].__rowId)===key){ rows.splice(i,1); break; } } updateRemovedRowDirtyState(key); }
@@ -1884,9 +1886,10 @@
       }
       function syncAllRowAircraftTypes(){ for(var i=0;i<rows.length;i++) fillAircraftTypeFromReg(rows[i]); }
       function tsvLineFromRow(row){ return LOG_HEADERS.map(function(key){ var value=key==='Date'?workbookDateValue(row):row[key]; return s(value).replace(/\r?\n/g,' ').replace(/\t/g,' '); }).join('\t'); }
-      function fullLogbookText(){ var header=LOG_HEADERS.join('\t'),body=nonEmptyRows(rows).map(tsvLineFromRow).join('\r\n'); return header+'\r\n'+body+(body?'\r\n':''); }
-      function comparableRowSignature(row){ return rowHasEntryContent(row||{}) ? tsvLineFromRow(row) : ''; }
-      function comparableRowOrder(){ var ids=[]; for(var i=0;i<rows.length;i++) if(rowHasEntryContent(rows[i]||{})) ids.push(String(rows[i].__rowId)); return ids.join('|'); }
+      function fullLogbookText(){ var header=LOG_HEADERS.join('\t'),body=workbookContentRows(rows).map(tsvLineFromRow).join('\r\n'); return header+'\r\n'+body+(body?'\r\n':''); }
+      function comparableRowSignature(row){ return rowHasWorkbookContent(row||{}) ? tsvLineFromRow(row) : ''; }
+      function savedComparableRowSignature(row){ var key=String(row&&row.__rowId); return Object.prototype.hasOwnProperty.call(savedLogbookRowSignatures,key)?savedLogbookRowSignatures[key]:''; }
+      function comparableRowOrder(){ var ids=[]; for(var i=0;i<rows.length;i++) if(rowHasWorkbookContent(rows[i]||{})) ids.push(String(rows[i].__rowId)); return ids.join('|'); }
       function hasDirtyLogbookRows(){ for(var key in dirtyLogbookRowIds){ if(Object.prototype.hasOwnProperty.call(dirtyLogbookRowIds,key)) return true; } return false; }
       function syncDataDirtyFlag(){ dataDirty=comparableOrderDirty||hasDirtyLogbookRows(); }
       function refreshComparableOrderDirty(){ comparableOrderDirty=comparableRowOrder()!==savedLogbookRowOrder; syncDataDirtyFlag(); }
@@ -2339,7 +2342,7 @@
       }
       // Main UI render pass. This rebuilds the visible pages from the current in-memory
       // state instead of diffing small DOM fragments, which keeps layout logic simpler.
-      function renderAll(){ try { taskTextMeasureCache=null; syncMindMapButtonVisibility(); syncFilterAircraftModeUi(); syncFilterButtonState(); syncSearchUi(); renderFilterStrip(); var activeRows=nonEmptyRows(rows),visibleRows=activeRows.filter(function(row){ return rowMatchesSearch(row)&&(!hasActiveFilters()||rowMatchesFilters(row)); }),preserveFilteredSlots=shouldPreserveFilteredRowSlots(); if(!visibleRows.length){ syncSharedDatalists(sharedDatalistsHtml()); pagesEl.innerHTML=renderEmptyState(); return; } var renderedGroups=buildRenderedGroups(activeRows,visibleRows),html=[]; syncSharedDatalists(sharedDatalistsHtml()+renderedGroupDatalistsHtml(renderedGroups)); for(var i=0;i<renderedGroups.length;i++){ var group=renderedGroups[i].group,pages=renderedGroups[i].pages; for(var j=0;j<pages.length;j++){ var pageKey=(s(group.key)+'||'+pages[j].map(function(item){ return item.row.__rowId; }).join('-')); html.push(renderDataPage(group,pages[j],pageKey,preserveFilteredSlots)); } } pagesEl.innerHTML=html.join(''); } catch(e){ fail('Could not render pages: '+e.message); } }
+      function renderAll(){ try { taskTextMeasureCache=null; syncMindMapButtonVisibility(); syncFilterAircraftModeUi(); syncFilterButtonState(); syncSearchUi(); renderFilterStrip(); var activeRows=workbookContentRows(rows),visibleRows=activeRows.filter(function(row){ return rowMatchesSearch(row)&&(!hasActiveFilters()||rowMatchesFilters(row)); }),preserveFilteredSlots=shouldPreserveFilteredRowSlots(); if(!visibleRows.length){ syncSharedDatalists(sharedDatalistsHtml()); pagesEl.innerHTML=renderEmptyState(); return; } var renderedGroups=buildRenderedGroups(activeRows,visibleRows),html=[]; syncSharedDatalists(sharedDatalistsHtml()+renderedGroupDatalistsHtml(renderedGroups)); for(var i=0;i<renderedGroups.length;i++){ var group=renderedGroups[i].group,pages=renderedGroups[i].pages; for(var j=0;j<pages.length;j++){ var pageKey=(s(group.key)+'||'+pages[j].map(function(item){ return item.row.__rowId; }).join('-')); html.push(renderDataPage(group,pages[j],pageKey,preserveFilteredSlots)); } } pagesEl.innerHTML=html.join(''); } catch(e){ fail('Could not render pages: '+e.message); } }
       async function renderAllWithLoading(title, text){ setLoadingState(true,title||'Loading logbook',text||'Rendering logbook pages...'); await nextPaint(); renderAll(); }
 
       // ---- Modal editor ----
@@ -3974,7 +3977,15 @@
         var cell=ev.target.closest&&(ev.target.closest('.editable-cell')||ev.target.closest('[data-row-id]')||ev.target.closest('[data-new-row]'));
         if(!cell) return;
         var wasNewRow=cell.hasAttribute('data-new-row'),field=cell.getAttribute('data-edit-field');
-        if(!updateRowFromEditor(cell)) return;
+        var row=updateRowFromEditor(cell);
+        if(!row) return;
+        if(!rowHasEntryContent(row)&&comparableRowSignature(row)!==(savedComparableRowSignature(row)||'')){
+          removeRowById(row.__rowId);
+          refreshUnsavedChangesState();
+          renderAllWithMotion();
+          scheduleAutoSave();
+          return;
+        }
         if(wasNewRow||fieldAffectsRowLayout(field)) scheduleLayoutRefresh(250);
       },true);
       window.addEventListener('afterprint',function(){ clearPrintSelection(); setPrintOptionsOpen(false); });
