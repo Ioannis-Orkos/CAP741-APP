@@ -64,21 +64,6 @@
       var NEW_WORKBOOK_SUPERVISOR_LICENCE = 'UK.XX.XXXXXXX';
       var NEW_WORKBOOK_TASK_TEXT = 'Dummy data test one';
       var NEW_WORKBOOK_OWNER_NAME = 'User User';
-      var DEFAULT_FLAG_RECORDS = [
-        { section:FLAG_SECTION_PRIMARY, flag:'INSP - Inspections (Surveillance, Detailed & General Visual)', color:'Gold' },
-        { section:FLAG_SECTION_PRIMARY, flag:'T/S - Troubleshooting', color:'Purple' },
-        { section:FLAG_SECTION_PRIMARY, flag:'F & O - Functional & Operational Check', color:'Green' },
-        { section:FLAG_SECTION_PRIMARY, flag:'SRM - Structural Repair Manual', color:'Blue' },
-        { section:FLAG_SECTION_PRIMARY, flag:'R & I - Removal & Installation', color:'Maroon' },
-        { section:FLAG_SECTION_MORE, flag:'Metal Damage Assessment*', color:'Black' },
-        { section:FLAG_SECTION_MORE, flag:'CDCCL Tasks*', color:'Gray' },
-        { section:FLAG_SECTION_MORE, flag:'Metal Repair*', color:'MistyRose' },
-        { section:FLAG_SECTION_MORE, flag:'Elect Wiring, Looming, Crimping, Soldering etc.*', color:'SkyBlue' },
-        { section:FLAG_SECTION_MORE, flag:'Composite Damage Assessment*', color:'Teal' },
-        { section:FLAG_SECTION_MORE, flag:'ESDS Procedures*', color:'Pink' },
-        { section:FLAG_SECTION_MORE, flag:'Composite Repair*', color:'DarkRed' },
-        { section:FLAG_SECTION_MORE, flag:'Avionic LRU Replacement*', color:'Aqua' }
-      ];
       var OTHER_LAYOUT_DEFAULTS = { top: 36, headerHeight: 11, left: 14.5, dateStart: 14.5, regStart: 31.5, jobStart: 53.5, taskStart: 69, superStart: 142, end: 193, rowHeight: 13, textTop: 3, textLeft: 1 };
       var SUPERVISOR_LIST_ROWS_PER_PAGE = 10;
 
@@ -1724,6 +1709,10 @@
         var store=window.CAP741_CHAPTER_DATA||window.CAP741_PREFILLED_CHAPTERS||[];
         return Array.isArray(store)?store:[];
       }
+      function flagDataStore(){
+        var store=window.CAP741_FLAG_DATA||window.CAP741_PREFILLED_FLAGS||[];
+        return Array.isArray(store)?store:[];
+      }
       function protectedPayloadValue(payload){ return typeof payload==='string' ? s(payload) : s(payload&&payload.cipher); }
       function protectedDataAvailable(){
         var store=protectedDataStore();
@@ -1836,7 +1825,21 @@
           return { section:normalizeFlagSection(record&&record.section), flag:s(record&&record.flag), color:s(record&&record.color) };
         }).filter(function(record){ return !!record.flag; });
       }
-      function defaultFlagRecords(){ return cloneFlagRecords(DEFAULT_FLAG_RECORDS); }
+      function defaultFlagRecords(){
+        return cloneFlagRecords(flagDataStore().map(function(record){
+          return {
+            section:record&&(
+              record.section||
+              record.Section||
+              record.group||
+              record.Group||
+              record.Flags
+            ),
+            flag:record&&(record.flag||record.Flag||record.label||record.Label||record.name||record.Name||record.More),
+            color:record&&(record.color||record.Color||record.colour||record.Colour||record.Gold)
+          };
+        }));
+      }
       function normalizeFlagToken(value){
         return normalizedText(s(value).replace(/[–—]/g,'-').replace(/\s+/g,' '));
       }
@@ -1857,31 +1860,31 @@
         return label?label.charAt(0).toUpperCase():'';
       }
       function flagSortIndex(label){
-        var token=normalizeFlagToken(label);
-        for(var i=0;i<DEFAULT_FLAG_RECORDS.length;i++) if(normalizeFlagToken(DEFAULT_FLAG_RECORDS[i].flag)===token) return i;
-        return DEFAULT_FLAG_RECORDS.length+1000;
+        var token=normalizeFlagToken(label),defaults=defaultFlagRecords();
+        for(var i=0;i<defaults.length;i++) if(normalizeFlagToken(defaults[i].flag)===token) return i;
+        return defaults.length+1000;
       }
       function flagColorForLabel(label){
-        var token=normalizeFlagToken(label),i;
+        var token=normalizeFlagToken(label),i,defaults=defaultFlagRecords();
         for(i=0;i<FLAG_RECORDS.length;i++) if(normalizeFlagToken(FLAG_RECORDS[i].flag)===token) return s(FLAG_RECORDS[i].color);
-        for(i=0;i<DEFAULT_FLAG_RECORDS.length;i++) if(normalizeFlagToken(DEFAULT_FLAG_RECORDS[i].flag)===token) return s(DEFAULT_FLAG_RECORDS[i].color);
+        for(i=0;i<defaults.length;i++) if(normalizeFlagToken(defaults[i].flag)===token) return s(defaults[i].color);
         return '';
       }
       function flagSectionForLabel(label){
-        var token=normalizeFlagToken(label),i;
+        var token=normalizeFlagToken(label),i,defaults=defaultFlagRecords();
         for(i=0;i<FLAG_RECORDS.length;i++) if(normalizeFlagToken(FLAG_RECORDS[i].flag)===token) return normalizeFlagSection(FLAG_RECORDS[i].section);
-        for(i=0;i<DEFAULT_FLAG_RECORDS.length;i++) if(normalizeFlagToken(DEFAULT_FLAG_RECORDS[i].flag)===token) return normalizeFlagSection(DEFAULT_FLAG_RECORDS[i].section);
+        for(i=0;i<defaults.length;i++) if(normalizeFlagToken(defaults[i].flag)===token) return normalizeFlagSection(defaults[i].section);
         return FLAG_SECTION_PRIMARY;
       }
       function flagRecordForToken(value){
-        var token=normalizeFlagToken(value),i,record;
+        var token=normalizeFlagToken(value),i,record,defaults=defaultFlagRecords();
         if(!token) return null;
         for(i=0;i<FLAG_RECORDS.length;i++){
           record=FLAG_RECORDS[i];
           if(normalizeFlagToken(record.flag)===token||normalizeFlagToken(flagShortLabel(record.flag))===token) return record;
         }
-        for(i=0;i<DEFAULT_FLAG_RECORDS.length;i++){
-          record=DEFAULT_FLAG_RECORDS[i];
+        for(i=0;i<defaults.length;i++){
+          record=defaults[i];
           if(normalizeFlagToken(record.flag)===token||normalizeFlagToken(flagShortLabel(record.flag))===token) return record;
         }
         return null;
@@ -1953,7 +1956,7 @@
       }
       function applyFlagRows(records){
         records=records||[];
-        var parsed=[],seen=Object.create(null),legacy=false,i,record,label,color,section,token;
+        var parsed=[],seen=Object.create(null),legacy=false,i,record,label,color,section,token,defaults=defaultFlagRecords();
         for(i=0;i<records.length;i++){
           record=records[i]||{};
           if(Object.prototype.hasOwnProperty.call(record,'Flags')||Object.prototype.hasOwnProperty.call(record,'More')||Object.prototype.hasOwnProperty.call(record,'Gold')) legacy=true;
@@ -1968,12 +1971,12 @@
           parsed.push({ section:section, flag:label, color:color||flagColorForLabel(label) });
         }
         if(legacy){
-          for(i=0;i<DEFAULT_FLAG_RECORDS.length;i++){
-            label=DEFAULT_FLAG_RECORDS[i].flag;
+          for(i=0;i<defaults.length;i++){
+            label=defaults[i].flag;
             token=normalizeFlagToken(label);
             if(seen[token]) continue;
             seen[token]=true;
-            parsed.push({ section:normalizeFlagSection(DEFAULT_FLAG_RECORDS[i].section), flag:label, color:s(DEFAULT_FLAG_RECORDS[i].color) });
+            parsed.push({ section:normalizeFlagSection(defaults[i].section), flag:label, color:s(defaults[i].color) });
           }
         }
         parsed=cloneFlagRecords(parsed);
