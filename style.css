@@ -628,7 +628,7 @@
       body.print-current-overlay table.sheet,
       body.print-current-overlay table.sheet thead th,
       body.print-current-overlay table.sheet td {
-        border:0 !important;
+        border-color:transparent !important;
         box-shadow:none !important;
         background:transparent !important;
       }
