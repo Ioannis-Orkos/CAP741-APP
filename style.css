@@ -762,8 +762,6 @@ button.mindmap-node { cursor:pointer; }
       @page { size:A5 landscape; margin:0; }
       html, body { width:var(--page-w); height:var(--page-h); background:#fff; }
       .error, .search-shell, .print-fab, .add-fab, .load-fab, .filter-fab, .mindmap-fab, .save-fab, .settings-fab, .info-fab, .print-options, .load-options, .filter-strip, .modal-backdrop, .loading-overlay, .task-expand, .sup-clear, .row-lock { display:none !important; }
-      .sup-flags { display:none !important; }
-      .sup.has-flags { padding-bottom:0 !important; }
       body.print-current .page.print-exclude,
       body.print-current-overlay .page.print-exclude,
       body.print-current-other-layout .page.print-exclude { display:none !important; }
