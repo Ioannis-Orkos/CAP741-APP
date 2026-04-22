@@ -93,6 +93,11 @@
       var modalBody = document.getElementById('blankModalBody');
       var infoModal = document.getElementById('infoModal');
       var closeInfoModalBtn = document.getElementById('closeInfoModal');
+      var mindMapModal = document.getElementById('mindMapModal');
+      var closeMindMapModalBtn = document.getElementById('closeMindMapModal');
+      var mindMapCanvasEl = document.getElementById('mindMapCanvas');
+      var mindMapDetailEl = document.getElementById('mindMapDetail');
+      var mindMapShellEl = mindMapCanvasEl ? mindMapCanvasEl.parentElement : null;
       var filterModal = document.getElementById('filterModal');
       var closeFilterPanelBtn = document.getElementById('closeFilterPanel');
       var filterForm = document.getElementById('filterForm');
@@ -214,6 +219,8 @@
       var savedLogbookRowOrder = '';
       var comparableOrderDirty = false;
       var aircraftOptionsByTypeCache = Object.create(null);
+      var mindMapState = { selectedKind:'root', selectedId:'overview', summary:null };
+      var mindMapRowHighlightTimer = 0;
 
       // ---- Filter state ----
       function emptyFilterState(){ return { aircraftType:[], aircraftReg:[], supervisor:[], chapter:[] }; }
@@ -242,7 +249,828 @@
       function resetDraftFilters(){ draftFilters=emptyFilterState(); for(var i=0;i<FILTER_KEYS.length;i++){ var input=filterInputForKey(FILTER_KEYS[i]); if(input) input.value=''; } renderDraftFilters(); }
       function openFilterPanel(){ if(!filterModal) return; draftFilters=cloneFilterState(activeFilters); for(var i=0;i<FILTER_KEYS.length;i++){ var input=filterInputForKey(FILTER_KEYS[i]); if(input) input.value=''; } renderDraftFilters(); filterModal.className='modal-backdrop filter-backdrop open'; setTimeout(function(){ if(filterAircraftTypeInput) filterAircraftTypeInput.focus(); },0); }
       function closeFilterPanel(){ if(filterModal) filterModal.className='modal-backdrop filter-backdrop'; }
-      function openMindMapFeature(){ showTopMessage('Mind map feature is ready for the next step. This button is now in place and waiting for the full view.','info'); }
+      function mindMapClip(text, limit){ text=s(text); limit=Number(limit)||0; if(!text||!limit||text.length<=limit) return text; return text.slice(0,Math.max(0,limit-3))+'...'; }
+      function mindMapTextSort(a,b){ return s(a).localeCompare(s(b),undefined,{numeric:true}); }
+      function isMindMapUngroupedChapter(value){
+        var label=s(value);
+        return !label||label===BLANK_CHAPTER_FILTER||label==='No Chapter'||label==='Ungrouped';
+      }
+      function mindMapChapterLabel(chapterCode, chapterDesc){
+        var code=s(chapterCode),desc=s(chapterDesc);
+        return code?(code+(desc?' - '+desc:'')):'Ungrouped';
+      }
+      function mindMapChapterTextSort(a,b){ var left=s(a),right=s(b); if(isMindMapUngroupedChapter(left)) return isMindMapUngroupedChapter(right)?0:1; if(isMindMapUngroupedChapter(right)) return -1; return left.localeCompare(right,undefined,{numeric:true}); }
+      function mindMapChapterSort(a,b){ var left=s(a&&a.chapter),right=s(b&&b.chapter); if(isMindMapUngroupedChapter(left)) return isMindMapUngroupedChapter(right)?0:1; if(isMindMapUngroupedChapter(right)) return -1; return left.localeCompare(right,undefined,{numeric:true}); }
+      function mindMapChapterLookup(){
+        var lookup=Object.create(null),source=chapterDataStore(),i;
+        function remember(chapter, description){
+          chapter=s(chapter);
+          description=s(description);
+          if(!chapter) return;
+          if(!lookup[chapter]) lookup[chapter]={ chapter:chapter, description:description };
+          else if(!lookup[chapter].description&&description) lookup[chapter].description=description;
+        }
+        for(i=0;i<source.length;i++) remember(source[i]&&source[i].chapter,source[i]&&source[i].description);
+        for(i=0;i<CHAPTER_OPTIONS.length;i++){ var parsed=parseChapterValue(CHAPTER_OPTIONS[i]); remember(parsed.chapter,parsed.chapterDesc); }
+        return lookup;
+      }
+      function normalizeMindMapGroupLabel(value){
+        var label=s(value),normalized=normalizedText(label);
+        if(!label||normalized==='unassigned group'||normalized==='ungrouped'||normalized==='unassigned') return 'Ungrouped';
+        return label;
+      }
+      function rowAircraftGroupLabel(row){
+        var reg=s(row&&row['A/C Reg']).toUpperCase(),type=s(aircraftLabel(row)),record=reg?aircraftReferenceRecordForReg(reg):null;
+        if(!reg) return 'No A/C Reg';
+        return normalizeMindMapGroupLabel(s(record&&record.group)||s(aircraftGroupForType(type)));
+      }
+      function rowAircraftTypeLabel(row){ return s(aircraftLabel(row))||'Unassigned Aircraft Type'; }
+      function mindMapGroupSort(a,b){
+        var left=normalizeMindMapGroupLabel(a&&a.label||a),right=normalizeMindMapGroupLabel(b&&b.label||b);
+        if(left==='No A/C Reg'&&right!=='No A/C Reg') return 1;
+        if(right==='No A/C Reg'&&left!=='No A/C Reg') return -1;
+        if(left==='Ungrouped'&&right!=='Ungrouped') return 1;
+        if(right==='Ungrouped'&&left!=='Ungrouped') return -1;
+        return left.localeCompare(right,undefined,{numeric:true});
+      }
+      function mindMapExpandedGroups(){
+        if(!mindMapState.expandedGroups) mindMapState.expandedGroups=Object.create(null);
+        return mindMapState.expandedGroups;
+      }
+      function mindMapNodeOffsets(){
+        if(!mindMapState.nodeOffsets) mindMapState.nodeOffsets=Object.create(null);
+        return mindMapState.nodeOffsets;
+      }
+      function mindMapNodeOffset(key){
+        var offsets=mindMapNodeOffsets();
+        if(!offsets[key]) offsets[key]={ x:0, y:0 };
+        return offsets[key];
+      }
+      function mindMapDomKey(kind, id){ return String(kind||'node')+'-'+encodeURIComponent(String(id==null?'':id)); }
+      function mindMapJobSort(a,b){
+        var left=Number(a&&a.sortDate),right=Number(b&&b.sortDate),blank=8640000000000000;
+        if(!isFinite(left)||left===blank) left=-1;
+        if(!isFinite(right)||right===blank) right=-1;
+        if(left!==right) return right-left;
+        return mindMapTextSort(a&&a.label,b&&b.label);
+      }
+      function buildMindMapGroupTypeItems(group){
+        var jobs=(group&&group.jobs)||[],lookup=Object.create(null),list=[],i,job,typeLabel,item,chapterLabel;
+        for(i=0;i<jobs.length;i++){
+          job=jobs[i]||{};
+          typeLabel=s(job.type)||'Unassigned Aircraft Type';
+          if(!lookup[typeLabel]) lookup[typeLabel]={ id:typeLabel, label:typeLabel, entryCount:0, jobs:[], _chapters:Object.create(null), _regs:Object.create(null) };
+          item=lookup[typeLabel];
+          item.entryCount++;
+          item.jobs.push(job);
+          chapterLabel=s(job.chapterLabel);
+          if(chapterLabel) item._chapters[chapterLabel]=chapterLabel;
+          if(s(job.reg)) item._regs[s(job.reg)]=s(job.reg);
+        }
+        for(typeLabel in lookup) if(Object.prototype.hasOwnProperty.call(lookup,typeLabel)){
+          item=lookup[typeLabel];
+          item.jobs.sort(mindMapJobSort);
+          item.chapters=Object.keys(item._chapters).sort(mindMapChapterTextSort);
+          item.registrations=Object.keys(item._regs).sort(mindMapTextSort);
+          item.chapterItems=buildMindMapTypeChapterItems(item);
+          item.regItems=item.chapterItems;
+          delete item._chapters;
+          delete item._regs;
+          list.push(item);
+        }
+        list.sort(function(a,b){ return mindMapTextSort(a&&a.label,b&&b.label); });
+        return list;
+      }
+      function mindMapMetricHtml(label, value){ return '<div class="mindmap-metric"><span class="mindmap-metric-value">'+esc(value)+'</span><span class="mindmap-metric-label">'+esc(label)+'</span></div>'; }
+      function mindMapPillListHtml(items, emptyText){
+        if(!items||!items.length) return '<div class="mindmap-empty-mini">'+esc(emptyText||'Nothing recorded yet.')+'</div>';
+        var html=[];
+        for(var i=0;i<items.length;i++) html.push('<span class="mindmap-pill">'+esc(items[i])+'</span>');
+        return '<div class="mindmap-pill-list">'+html.join('')+'</div>';
+      }
+      function mindMapDetailCardHtml(kind, id, title, meta, copy){
+        return '<button class="mindmap-detail-card" type="button" data-mindmap-node-kind="'+esc(kind)+'" data-mindmap-node-id="'+esc(id)+'"><strong>'+esc(title)+'</strong>'+(meta?'<span class="mindmap-detail-card-meta">'+esc(meta)+'</span>':'')+(copy?'<span class="mindmap-detail-card-copy">'+esc(copy)+'</span>':'')+'</button>';
+      }
+      function mindMapJobLinkHtml(job){
+        var meta=[s(job.date),s(job.reg),s(job.chapterLabel)].filter(Boolean).join(' | ');
+        return '<button class="mindmap-job-link" type="button" data-mindmap-job-row-id="'+esc(job.rowId)+'"><strong>'+esc(job.label)+'</strong>'+(meta?'<span class="mindmap-job-link-meta">'+esc(meta)+'</span>':'')+'</button>';
+      }
+      function mindMapChapterAccordionHtml(chapter){
+        var jobs=[],meta=[],notes=[],i;
+        for(i=0;i<chapter.jobs.length;i++) jobs.push(mindMapJobLinkHtml(chapter.jobs[i]));
+        meta.push(String(Number(chapter.entryCount)||0)+' entries');
+        meta.push(String((chapter.jobs||[]).length)+' jobs');
+        if(chapter.registrations&&chapter.registrations.length) meta.push(String(chapter.registrations.length)+' regs');
+        if(s(chapter.description)) notes.push(s(chapter.description));
+        if(chapter.registrations&&chapter.registrations.length) notes.push('Regs: '+mindMapClip(chapter.registrations.join(', '),120));
+        return '<details class="mindmap-accordion"><summary class="mindmap-accordion-summary"><span class="mindmap-accordion-head"><strong class="mindmap-accordion-title">'+esc(chapter.label)+'</strong><span class="mindmap-accordion-meta">'+esc(meta.join(' | '))+'</span></span><span class="mindmap-accordion-toggle" aria-hidden="true"></span></summary>'+(notes.length?'<div class="mindmap-accordion-copy">'+esc(notes.join(' '))+'</div>':'')+'<div class="mindmap-accordion-body"><div class="mindmap-job-links">'+(jobs.join('')||'<div class="mindmap-empty-mini">No jobs recorded in this chapter.</div>')+'</div></div></details>';
+      }
+      function mindMapChapterAccordionListHtml(items, emptyText){
+        if(!items||!items.length) return '<div class="mindmap-empty-mini">'+esc(emptyText||'No chapters recorded yet.')+'</div>';
+        var html=[],i;
+        for(i=0;i<items.length;i++) html.push(mindMapChapterAccordionHtml(items[i]));
+        return '<div class="mindmap-accordion-list">'+html.join('')+'</div>';
+      }
+      function mindMapBranchHtml(title, count, itemsHtml, branchClass){
+        var total=Number(count)||0;
+        return '<section class="mindmap-branch '+esc(branchClass||'')+'"><div class="mindmap-node mindmap-node-hub" aria-hidden="true"><span class="mindmap-node-title">'+esc(title)+'</span><span class="mindmap-node-meta">'+esc(String(total)+' nodes in this branch')+'</span></div><div class="mindmap-node-list">'+(itemsHtml||'<div class="mindmap-empty-mini">Nothing recorded yet.</div>')+'</div></section>';
+      }
+      function renderMindMapNode(kind, id, title, meta, extraClass){
+        var active=mindMapState.selectedKind===kind&&mindMapState.selectedId===id;
+        return '<button class="mindmap-node '+(extraClass||'')+(active?' is-active':'')+'" type="button" data-mindmap-node-kind="'+esc(kind)+'" data-mindmap-node-id="'+esc(id)+'"><span class="mindmap-node-title">'+esc(title)+'</span>'+(meta?'<span class="mindmap-node-meta">'+esc(meta)+'</span>':'')+'</button>';
+      }
+      function mindMapNodePositionStyle(x, y, delay){
+        var style='left:'+Math.round(Number(x)||0)+'px;top:'+Math.round(Number(y)||0)+'px;';
+        if(delay!=null) style+='--mindmap-delay:'+String(delay)+'s;';
+        return style;
+      }
+      function mindMapConnectorPath(fromX, fromY, toX, toY){
+        var dx=(Number(toX)||0)-(Number(fromX)||0),curve=Math.max(86,Math.round(Math.abs(dx)*0.34)),dir=dx>=0?1:-1,c1x=(Number(fromX)||0)+(curve*dir),c2x=(Number(toX)||0)-(curve*dir);
+        return 'M'+Math.round(Number(fromX)||0)+' '+Math.round(Number(fromY)||0)+' C '+Math.round(c1x)+' '+Math.round(Number(fromY)||0)+' '+Math.round(c2x)+' '+Math.round(Number(toY)||0)+' '+Math.round(Number(toX)||0)+' '+Math.round(Number(toY)||0);
+      }
+      function mindMapCenteredPositions(count, centerY, gap){
+        var out=[],i,start;
+        count=Number(count)||0;
+        if(count<1) return out;
+        start=(Number(centerY)||0)-(((count-1)*(Number(gap)||0))/2);
+        for(i=0;i<count;i++) out.push(Math.round(start+(i*(Number(gap)||0))));
+        return out;
+      }
+      function mindMapFanPositions(count, centerX, centerY, radiusX, radiusY, startDeg, endDeg){
+        var out=[],i,angle,start,end;
+        count=Number(count)||0;
+        if(count<1) return out;
+        start=Number(startDeg);
+        end=Number(endDeg);
+        if(!isFinite(start)) start=-72;
+        if(!isFinite(end)) end=72;
+        if(count===1){
+          angle=((start+end)/2)*(Math.PI/180);
+          out.push({ x:Math.round((Number(centerX)||0)+(Math.cos(angle)*(Number(radiusX)||0))), y:Math.round((Number(centerY)||0)+(Math.sin(angle)*(Number(radiusY)||0))) });
+          return out;
+        }
+        for(i=0;i<count;i++){
+          angle=(start+(((end-start)*i)/(count-1)))*(Math.PI/180);
+          out.push({ x:Math.round((Number(centerX)||0)+(Math.cos(angle)*(Number(radiusX)||0))), y:Math.round((Number(centerY)||0)+(Math.sin(angle)*(Number(radiusY)||0))) });
+        }
+        return out;
+      }
+      function mindMapCirclePositions(count, centerX, centerY, radiusX, radiusY, startDeg){
+        var out=[],i,angle,start,step;
+        count=Number(count)||0;
+        if(count<1) return out;
+        start=Number(startDeg);
+        if(!isFinite(start)) start=-90;
+        step=360/count;
+        for(i=0;i<count;i++){
+          angle=(start+(step*i))*(Math.PI/180);
+          out.push({ x:Math.round((Number(centerX)||0)+(Math.cos(angle)*(Number(radiusX)||0))), y:Math.round((Number(centerY)||0)+(Math.sin(angle)*(Number(radiusY)||0))), angle:angle });
+        }
+        return out;
+      }
+      function findMindMapGroup(summary, groupId){
+        var groups=(summary&&summary.groups)||[],i,target=s(groupId);
+        if(!target) return null;
+        for(i=0;i<groups.length;i++) if(s(groups[i]&&groups[i].id)===target) return groups[i];
+        return null;
+      }
+      function findMindMapGroupType(group, typeId){
+        var items=(group&&group.typeItems)||[],i,target=s(typeId);
+        if(!target) return null;
+        for(i=0;i<items.length;i++) if(s(items[i]&&items[i].id)===target) return items[i];
+        return null;
+      }
+      function findMindMapTypeChapter(typeItem, chapterId){
+        var items=(typeItem&&(typeItem.chapterItems||typeItem.regItems))||[],i,target=s(chapterId);
+        if(!target) return null;
+        for(i=0;i<items.length;i++) if(s(items[i]&&items[i].id)===target) return items[i];
+        return null;
+      }
+      function findMindMapRegChapter(regItem, chapterId){
+        var items=(regItem&&regItem.chapterItems)||[],i,target=s(chapterId);
+        if(!target) return null;
+        for(i=0;i<items.length;i++) if(s(items[i]&&items[i].id)===target) return items[i];
+        return null;
+      }
+      function buildMindMapRegChapterItems(regItem){
+        var jobs=(regItem&&regItem.jobs)||[],lookup=Object.create(null),list=[],i,job,chapterId,chapterLabel,item;
+        for(i=0;i<jobs.length;i++){
+          job=jobs[i]||{};
+          chapterId=s(job.chapter)||BLANK_CHAPTER_FILTER;
+          chapterLabel=s(job.chapterLabel)||'Ungrouped';
+          if(!lookup[chapterId]) lookup[chapterId]={ id:chapterId, label:chapterLabel, description:s(job.chapterDesc), entryCount:0, jobs:[] };
+          item=lookup[chapterId];
+          item.entryCount++;
+          item.jobs.push(job);
+          if(!item.description&&s(job.chapterDesc)) item.description=s(job.chapterDesc);
+        }
+        for(chapterId in lookup) if(Object.prototype.hasOwnProperty.call(lookup,chapterId)){
+          item=lookup[chapterId];
+          item.jobs.sort(mindMapJobSort);
+          list.push(item);
+        }
+        list.sort(function(a,b){ return mindMapChapterTextSort(a&&a.label,b&&b.label); });
+        return list;
+      }
+      function buildMindMapTypeChapterItems(typeItem){
+        var jobs=(typeItem&&typeItem.jobs)||[],lookup=Object.create(null),list=[],i,job,chapterId,chapterLabel,item,regLabel;
+        for(i=0;i<jobs.length;i++){
+          job=jobs[i]||{};
+          chapterId=s(job.chapter)||BLANK_CHAPTER_FILTER;
+          chapterLabel=s(job.chapterLabel)||'Ungrouped';
+          if(!lookup[chapterId]) lookup[chapterId]={ id:chapterId, label:chapterLabel, description:s(job.chapterDesc), entryCount:0, jobs:[], _regs:Object.create(null) };
+          item=lookup[chapterId];
+          item.entryCount++;
+          item.jobs.push(job);
+          regLabel=s(job.reg)||'No A/C Reg';
+          item._regs[regLabel]=regLabel;
+          if(!item.description&&s(job.chapterDesc)) item.description=s(job.chapterDesc);
+        }
+        for(chapterId in lookup) if(Object.prototype.hasOwnProperty.call(lookup,chapterId)){
+          item=lookup[chapterId];
+          item.jobs.sort(mindMapJobSort);
+          item.registrations=Object.keys(item._regs).sort(mindMapTextSort);
+          delete item._regs;
+          list.push(item);
+        }
+        list.sort(function(a,b){ return mindMapChapterTextSort(a&&a.label,b&&b.label); });
+        return list;
+      }
+      function buildMindMapLayout(summary){
+        var sceneWidth=4080,hubX=2040,groups=summary.groups||[],expandedGroups=mindMapExpandedGroups(),groupOrbitX=Math.max(620,Math.min(980,560+(groups.length*22))),groupOrbitY=Math.max(430,Math.min(760,360+(groups.length*18))),i,domKey,baseX,baseY,offset,node,groupPositions,typePositions,groupItem,typeItems,ringPos,groupAngleDeg,typeRadiusX,typeRadiusY,minX,maxX,minY,maxY,shiftX,shiftY,layout={sceneWidth:sceneWidth,sceneHeight:2400,rootX:hubX,rootY:1200,hubs:[],nodes:[],links:[]};
+        layout.hubs.push({ key:'groups-hub', domKey:'groups-hub', label:'Aircraft Groups', meta:String(Number(summary.groupCount)||0)+' groups', x:hubX, y:layout.rootY, className:'mindmap-scene-hub-groups' });
+        groupPositions=mindMapCirclePositions(groups.length,hubX,layout.rootY,groupOrbitX,groupOrbitY,-90);
+        minX=hubX-180;
+        maxX=hubX+180;
+        minY=layout.rootY-120;
+        maxY=layout.rootY+120;
+        for(i=0;i<groups.length;i++){
+          groupItem=groups[i];
+          ringPos=groupPositions[i]||{ x:hubX, y:layout.rootY, angle:-Math.PI/2 };
+          domKey=mindMapDomKey('group',groupItem.id);
+          baseX=Math.round(ringPos.x);
+          baseY=Math.round(ringPos.y);
+          offset=mindMapNodeOffset(domKey);
+          node={ kind:'group', id:groupItem.id, domKey:domKey, label:groupItem.label, meta:groupItem.entryCount+' entries | '+groupItem.typeItems.length+' types', x:baseX+offset.x, y:baseY+offset.y, baseX:baseX, baseY:baseY, orbitAngle:ringPos.angle, linkFromX:hubX, linkFromY:layout.rootY, className:'mindmap-scene-node-group'+(expandedGroups[groupItem.id]?' is-branch-open':''), delay:(i%8)*0.05, group:groupItem };
+          layout.nodes.push(node);
+          layout.links.push({ domKey:domKey, fromX:hubX, fromY:layout.rootY, toX:node.x, toY:node.y, className:'mindmap-link-branch' });
+          minX=Math.min(minX,node.x-210);
+          maxX=Math.max(maxX,node.x+210);
+          minY=Math.min(minY,node.y-90);
+          maxY=Math.max(maxY,node.y+90);
+          if(expandedGroups[groupItem.id]){
+            typeItems=groupItem.typeItems||[];
+            groupAngleDeg=(node.orbitAngle*180/Math.PI);
+            typeRadiusX=Math.max(240,Math.min(420,180+(typeItems.length*18)));
+            typeRadiusY=Math.max(170,Math.min(340,130+(typeItems.length*15)));
+            typePositions=mindMapFanPositions(typeItems.length,node.x+(Math.cos(node.orbitAngle)*140),node.y+(Math.sin(node.orbitAngle)*140),typeRadiusX,typeRadiusY,groupAngleDeg-86,groupAngleDeg+86);
+            for(var typeIndex=0;typeIndex<typeItems.length;typeIndex++){
+              node={ kind:'group-type', groupId:groupItem.id, id:typeItems[typeIndex].id, domKey:mindMapDomKey('group-type',groupItem.id+'::'+typeItems[typeIndex].id), label:typeItems[typeIndex].label, meta:typeItems[typeIndex].entryCount+' entries | '+typeItems[typeIndex].chapterItems.length+' chapters', x:Math.round((typePositions[typeIndex]&&typePositions[typeIndex].x)||(node.x+260)), y:Math.round((typePositions[typeIndex]&&typePositions[typeIndex].y)||node.y), className:'mindmap-scene-node-type', delay:(typeIndex%8)*0.05, typeItem:typeItems[typeIndex], linkFromX:baseX+offset.x, linkFromY:baseY+offset.y };
+              layout.nodes.push(node);
+              layout.links.push({ domKey:node.domKey, fromX:node.linkFromX, fromY:node.linkFromY, toX:node.x, toY:node.y, className:'mindmap-link-type' });
+              minX=Math.min(minX,node.x-190);
+              maxX=Math.max(maxX,node.x+190);
+              minY=Math.min(minY,node.y-72);
+              maxY=Math.max(maxY,node.y+72);
+            }
+          }
+        }
+        layout.sceneWidth=Math.max(2200,Math.round(maxX-minX+420));
+        layout.sceneHeight=Math.max(1600,Math.round(maxY-minY+380));
+        shiftX=Math.round(-minX+210);
+        shiftY=Math.round(-minY+160);
+        layout.rootX=Math.round(layout.rootX+shiftX);
+        layout.rootY=Math.round(layout.rootY+shiftY);
+        for(i=0;i<layout.hubs.length;i++){ layout.hubs[i].x+=shiftX; layout.hubs[i].y+=shiftY; }
+        for(i=0;i<layout.nodes.length;i++){ layout.nodes[i].x+=shiftX; layout.nodes[i].y+=shiftY; if(layout.nodes[i].baseX!=null) layout.nodes[i].baseX+=shiftX; if(layout.nodes[i].baseY!=null) layout.nodes[i].baseY+=shiftY; if(layout.nodes[i].linkFromX!=null) layout.nodes[i].linkFromX+=shiftX; if(layout.nodes[i].linkFromY!=null) layout.nodes[i].linkFromY+=shiftY; }
+        for(i=0;i<layout.links.length;i++){ layout.links[i].fromX+=shiftX; layout.links[i].toX+=shiftX; layout.links[i].fromY+=shiftY; layout.links[i].toY+=shiftY; }
+        return layout;
+      }
+      function renderMindMapSceneHub(hub){
+        return '<div class="mindmap-node mindmap-scene-hub '+esc(hub.className||'')+'" data-mindmap-node-key="'+esc(hub.domKey||hub.key||'')+'" style="'+mindMapNodePositionStyle(hub.x,hub.y)+'" aria-hidden="true"><span class="mindmap-node-title">'+esc(hub.label)+'</span>'+(hub.meta?'<span class="mindmap-node-meta">'+esc(hub.meta)+'</span>':'')+'</div>';
+      }
+      function renderMindMapGroupSceneNode(node){
+        var active=s(mindMapState.focusGroupId)===s(node.id),expanded=!!mindMapExpandedGroups()[node.id];
+        return '<article class="mindmap-node mindmap-scene-node '+esc(node.className||'')+(active?' is-active':'')+'" tabindex="0" role="button" aria-expanded="'+(expanded?'true':'false')+'" data-mindmap-node-kind="group" data-mindmap-node-id="'+esc(node.id)+'" data-mindmap-node-key="'+esc(node.domKey)+'" data-mindmap-draggable="1" style="'+mindMapNodePositionStyle(node.x,node.y,node.delay)+'"><div class="mindmap-node-head"><div class="mindmap-node-head-copy"><span class="mindmap-node-title">'+esc(node.label)+'</span>'+(node.meta?'<span class="mindmap-node-meta">'+esc(node.meta)+'</span>':'')+'</div><span class="mindmap-node-toggle">'+(expanded?'Collapse':'Expand')+'</span></div></article>';
+      }
+      function renderMindMapSceneNode(node){
+        var active=mindMapState.selectedKind===node.kind&&mindMapState.selectedId===node.id;
+        if(node.kind==='group') return renderMindMapGroupSceneNode(node);
+        if(node.kind==='group-type'){
+          active=s(mindMapState.focusGroupId)===s(node.groupId)&&s(mindMapState.focusTypeId)===s(node.id);
+          return '<article class="mindmap-node mindmap-scene-node '+esc(node.className||'')+(active?' is-active':'')+'" tabindex="0" role="button" data-mindmap-node-kind="group-type" data-mindmap-group-id="'+esc(node.groupId)+'" data-mindmap-node-id="'+esc(node.id)+'" data-mindmap-node-key="'+esc(node.domKey)+'" style="'+mindMapNodePositionStyle(node.x,node.y,node.delay)+'"><div class="mindmap-node-head"><div class="mindmap-node-head-copy"><span class="mindmap-node-title">'+esc(node.label)+'</span>'+(node.meta?'<span class="mindmap-node-meta">'+esc(node.meta)+'</span>':'')+'</div><span class="mindmap-node-toggle">'+(active?'Active':'Open Notes')+'</span></div></article>';
+        }
+        if(node.kind==='group-reg'){
+          active=s(mindMapState.focusGroupId)===s(node.groupId)&&s(mindMapState.focusTypeId)===s(node.typeId)&&s(mindMapState.focusRegId)===s(node.id);
+          return '<article class="mindmap-node mindmap-scene-node '+esc(node.className||'')+(active?' is-active':'')+'" tabindex="0" role="button" data-mindmap-node-kind="group-reg" data-mindmap-group-id="'+esc(node.groupId)+'" data-mindmap-type-id="'+esc(node.typeId)+'" data-mindmap-node-id="'+esc(node.id)+'" data-mindmap-node-key="'+esc(node.domKey)+'" style="'+mindMapNodePositionStyle(node.x,node.y,node.delay)+'"><div class="mindmap-node-head"><div class="mindmap-node-head-copy"><span class="mindmap-node-title">'+esc(node.label)+'</span>'+(node.meta?'<span class="mindmap-node-meta">'+esc(node.meta)+'</span>':'')+'</div><span class="mindmap-node-toggle">'+(active?'Close':'Jobs')+'</span></div></article>';
+        }
+        if(node.kind==='group-chapter'){
+          active=s(mindMapState.focusGroupId)===s(node.groupId)&&s(mindMapState.focusTypeId)===s(node.typeId)&&s(mindMapState.focusRegId)===s(node.regId)&&s(mindMapState.focusChapterId)===s(node.id);
+          return '<article class="mindmap-node mindmap-scene-node '+esc(node.className||'')+(active?' is-active':'')+'" tabindex="0" role="button" data-mindmap-node-kind="group-chapter" data-mindmap-group-id="'+esc(node.groupId)+'" data-mindmap-type-id="'+esc(node.typeId)+'" data-mindmap-reg-id="'+esc(node.regId)+'" data-mindmap-node-id="'+esc(node.id)+'" data-mindmap-node-key="'+esc(node.domKey)+'" style="'+mindMapNodePositionStyle(node.x,node.y,node.delay)+'"><div class="mindmap-node-head"><div class="mindmap-node-head-copy"><span class="mindmap-node-title">'+esc(node.label)+'</span>'+(node.meta?'<span class="mindmap-node-meta">'+esc(node.meta)+'</span>':'')+'</div><span class="mindmap-node-toggle">'+(active?'Close':'Jobs')+'</span></div></article>';
+        }
+        if(node.rowId) return '<button class="mindmap-node mindmap-scene-node '+esc(node.className||'')+'" type="button" data-mindmap-job-row-id="'+esc(node.rowId)+'" data-mindmap-node-key="'+esc(node.domKey||'')+'" style="'+mindMapNodePositionStyle(node.x,node.y,node.delay)+'"><span class="mindmap-node-title">'+esc(node.label)+'</span>'+(node.meta?'<span class="mindmap-node-meta">'+esc(node.meta)+'</span>':'')+'</button>';
+        return '<article class="mindmap-node mindmap-scene-node '+esc(node.className||'')+(active?' is-active':'')+'" tabindex="0" role="button" data-mindmap-node-kind="'+esc(node.kind)+'" data-mindmap-node-id="'+esc(node.id)+'" data-mindmap-node-key="'+esc(node.domKey||'')+'" style="'+mindMapNodePositionStyle(node.x,node.y,node.delay)+'"><span class="mindmap-node-title">'+esc(node.label)+'</span>'+(node.meta?'<span class="mindmap-node-meta">'+esc(node.meta)+'</span>':'')+'</article>';
+      }
+      function mindMapViewState(){
+        if(!mindMapState.view) mindMapState.view={ x:0, y:0, scale:0.76, dragging:false, pointerId:null, startClientX:0, startClientY:0, startX:0, startY:0, needsCenter:true };
+        return mindMapState.view;
+      }
+      function currentMindMapViewport(){ return mindMapCanvasEl&&mindMapCanvasEl.querySelector('[data-mindmap-viewport="1"]'); }
+      function currentMindMapScene(){ return mindMapCanvasEl&&mindMapCanvasEl.querySelector('[data-mindmap-scene="1"]'); }
+      function currentMindMapNodeEl(domKey){ return mindMapCanvasEl&&mindMapCanvasEl.querySelector('[data-mindmap-node-key="'+domKey+'"]'); }
+      function currentMindMapLinkEl(domKey){ return mindMapCanvasEl&&mindMapCanvasEl.querySelector('[data-mindmap-link-key="'+domKey+'"]'); }
+      function currentMindMapLayoutNode(domKey){
+        var layout=mindMapState.layout||null,i;
+        if(!layout||!layout.nodes) return null;
+        for(i=0;i<layout.nodes.length;i++) if(layout.nodes[i].domKey===domKey) return layout.nodes[i];
+        return null;
+      }
+      function clampMindMapScale(scale){ return Math.max(0.24,Math.min(1.7,Number(scale)||0.76)); }
+      function fitMindMapScale(maxScale){
+        var viewport=currentMindMapViewport(),scene=currentMindMapScene(),view=mindMapViewState(),availableWidth=0,availableHeight=0,nextScale=0;
+        if(!viewport||!scene) return view.scale;
+        availableWidth=Math.max(160,viewport.clientWidth-96);
+        availableHeight=Math.max(160,viewport.clientHeight-86);
+        nextScale=Math.min(availableWidth/Math.max(scene.offsetWidth,1),availableHeight/Math.max(scene.offsetHeight,1),Number(maxScale)||0.76);
+        view.scale=clampMindMapScale(nextScale);
+        updateMindMapZoomLabel();
+        return view.scale;
+      }
+      function updateMindMapZoomLabel(){ var label=mindMapCanvasEl&&mindMapCanvasEl.querySelector('[data-mindmap-zoom-label="1"]'); if(label) label.textContent=Math.round(mindMapViewState().scale*100)+'%'; }
+      function syncMindMapView(){
+        var scene=currentMindMapScene(),viewport=currentMindMapViewport(),view=mindMapViewState();
+        if(scene) scene.style.transform='translate('+view.x.toFixed(2)+'px,'+view.y.toFixed(2)+'px) scale('+view.scale.toFixed(3)+')';
+        if(viewport) viewport.classList.toggle('is-dragging',!!view.dragging);
+        updateMindMapZoomLabel();
+      }
+      function centerMindMapView(force){
+        var viewport=currentMindMapViewport(),scene=currentMindMapScene(),view=mindMapViewState();
+        if(!viewport||!scene) return;
+        if(!force&&!view.needsCenter) return;
+        var rootX=Number(scene.getAttribute('data-root-x'))||0,rootY=Number(scene.getAttribute('data-root-y'))||0;
+        view.x=(viewport.clientWidth/2)-(rootX*view.scale);
+        view.y=(viewport.clientHeight/2)-(rootY*view.scale);
+        view.needsCenter=false;
+        syncMindMapView();
+      }
+      function resetMindMapView(){
+        var view=mindMapViewState();
+        view.scale=0.76;
+        view.dragging=false;
+        view.pointerId=null;
+        view.needsCenter=true;
+        fitMindMapScale(0.76);
+        centerMindMapView(true);
+      }
+      function zoomMindMapAt(factor, clientX, clientY){
+        var viewport=currentMindMapViewport(),view=mindMapViewState();
+        if(!viewport) return;
+        var rect=viewport.getBoundingClientRect(),localX=clientX-rect.left,localY=clientY-rect.top,newScale=clampMindMapScale(view.scale*(Number(factor)||1));
+        if(newScale===view.scale) return;
+        var worldX=(localX-view.x)/view.scale,worldY=(localY-view.y)/view.scale;
+        view.scale=newScale;
+        view.x=localX-(worldX*newScale);
+        view.y=localY-(worldY*newScale);
+        view.needsCenter=false;
+        syncMindMapView();
+      }
+      function zoomMindMapBy(factor){
+        var viewport=currentMindMapViewport();
+        if(!viewport) return;
+        var rect=viewport.getBoundingClientRect();
+        zoomMindMapAt(factor,rect.left+(rect.width/2),rect.top+(rect.height/2));
+      }
+      function syncMindMapDraggedNode(domKey){
+        var node=currentMindMapLayoutNode(domKey),offset,nodeEl,linkEl;
+        if(!node) return;
+        offset=mindMapNodeOffset(domKey);
+        node.x=node.baseX+offset.x;
+        node.y=node.baseY+offset.y;
+        nodeEl=currentMindMapNodeEl(domKey);
+        if(nodeEl) nodeEl.style.cssText=mindMapNodePositionStyle(node.x,node.y,node.delay);
+        linkEl=currentMindMapLinkEl(domKey);
+        if(linkEl) linkEl.setAttribute('d',mindMapConnectorPath(node.linkFromX,node.linkFromY,node.x,node.y));
+      }
+      function beginMindMapNodeDrag(domKey, pointerId, clientX, clientY){
+        var nodeEl=currentMindMapNodeEl(domKey),offset=mindMapNodeOffset(domKey);
+        mindMapState.nodeDrag={ domKey:domKey, pointerId:pointerId, startClientX:Number(clientX)||0, startClientY:Number(clientY)||0, startX:offset.x, startY:offset.y, moved:false };
+        if(nodeEl&&nodeEl.setPointerCapture){
+          try { nodeEl.setPointerCapture(pointerId); } catch(err){}
+        }
+      }
+      function updateMindMapNodeDrag(clientX, clientY){
+        var drag=mindMapState.nodeDrag,offset,deltaX,deltaY;
+        if(!drag) return;
+        deltaX=(Number(clientX)||0)-drag.startClientX;
+        deltaY=(Number(clientY)||0)-drag.startClientY;
+        if(!drag.moved&&Math.abs(deltaX)<4&&Math.abs(deltaY)<4) return;
+        drag.moved=true;
+        offset=mindMapNodeOffset(drag.domKey);
+        offset.x=drag.startX+deltaX;
+        offset.y=drag.startY+deltaY;
+        syncMindMapDraggedNode(drag.domKey);
+      }
+      function endMindMapNodeDrag(pointerId){
+        var drag=mindMapState.nodeDrag,nodeEl;
+        if(!drag||pointerId!=null&&drag.pointerId!==pointerId) return false;
+        nodeEl=currentMindMapNodeEl(drag.domKey);
+        if(nodeEl&&nodeEl.releasePointerCapture){
+          try {
+            if(!nodeEl.hasPointerCapture||nodeEl.hasPointerCapture(drag.pointerId)) nodeEl.releasePointerCapture(drag.pointerId);
+          } catch(err){}
+        }
+        mindMapState.nodeDrag=null;
+        if(drag.moved) mindMapState.suppressClickUntil=Date.now()+220;
+        if(drag.moved) renderMindMapModal();
+        return !!drag.moved;
+      }
+      function canStartMindMapDrag(target){
+        return !(target&&target.closest&&target.closest('button,[role="button"],[data-mindmap-node-kind]'));
+      }
+      function beginMindMapDrag(pointerId, clientX, clientY){
+        var viewport=currentMindMapViewport(),view=mindMapViewState();
+        if(!viewport) return false;
+        view.dragging=true;
+        view.pointerId=pointerId;
+        view.startClientX=Number(clientX)||0;
+        view.startClientY=Number(clientY)||0;
+        view.startX=view.x;
+        view.startY=view.y;
+        view.needsCenter=false;
+        if(viewport.setPointerCapture){
+          try { viewport.setPointerCapture(pointerId); } catch(err){}
+        }
+        syncMindMapView();
+        return true;
+      }
+      function updateMindMapDrag(clientX, clientY){
+        var view=mindMapViewState();
+        if(!view.dragging) return;
+        view.x=view.startX+((Number(clientX)||0)-view.startClientX);
+        view.y=view.startY+((Number(clientY)||0)-view.startClientY);
+        syncMindMapView();
+      }
+      function endMindMapDrag(pointerId){
+        var viewport=currentMindMapViewport(),view=mindMapViewState(),activePointer=view.pointerId;
+        if(pointerId!=null&&activePointer!=null&&pointerId!==activePointer) return;
+        view.dragging=false;
+        view.pointerId=null;
+        if(viewport&&viewport.releasePointerCapture&&activePointer!=null){
+          try {
+            if(!viewport.hasPointerCapture||viewport.hasPointerCapture(activePointer)) viewport.releasePointerCapture(activePointer);
+          } catch(err){}
+        }
+        syncMindMapView();
+      }
+      function handleMindMapWheelEvent(ev){
+        var viewport=currentMindMapViewport(),delta,factor;
+        if(!viewport||!viewport.contains(ev.target)||!mindMapModal||mindMapModal.className.indexOf('open')===-1) return;
+        ev.preventDefault();
+        delta=Number(ev.deltaY)||0;
+        if(ev.deltaMode===1) delta*=18;
+        else if(ev.deltaMode===2) delta*=Math.max(viewport.clientHeight,1);
+        factor=Math.exp((-1*delta)/640);
+        zoomMindMapAt(factor,ev.clientX,ev.clientY);
+      }
+      function renderMindMapToolbar(){
+        return '<div class="mindmap-toolbar"><button class="mindmap-tool-btn" type="button" data-mindmap-zoom="out" aria-label="Zoom out">-</button><span class="mindmap-zoom-label" data-mindmap-zoom-label="1">'+Math.round(mindMapViewState().scale*100)+'%</span><button class="mindmap-tool-btn" type="button" data-mindmap-zoom="in" aria-label="Zoom in">+</button><button class="mindmap-tool-btn mindmap-tool-btn-reset" type="button" data-mindmap-zoom="reset">Center</button><button class="mindmap-tool-btn mindmap-tool-btn-details" type="button" data-mindmap-detail-toggle="1">'+(mindMapState.detailClosed?'Show Notes':'Hide Notes')+'</button></div>';
+      }
+      function buildMindMapSummary(){
+        var list=nonEmptyRows(rows).slice(),chapterLookup=mindMapChapterLookup(),groupsMap=Object.create(null),typesMap=Object.create(null),chaptersMap=Object.create(null),jobs=[],i;
+        function ensureGroupBucket(label){
+          var normalized=normalizeMindMapGroupLabel(label);
+          if(!groupsMap[normalized]) groupsMap[normalized]={ id:normalized, label:normalized, entryCount:0, jobs:[], _types:Object.create(null), _chapters:Object.create(null), _chapterItems:Object.create(null), _regs:Object.create(null) };
+          return groupsMap[normalized];
+        }
+        for(i=0;i<list.length;i++){
+          var row=list[i]||{},type=rowAircraftTypeLabel(row),group=rowAircraftGroupLabel(row),groupBucket=ensureGroupBucket(group),reg=s(row['A/C Reg']).toUpperCase(),chapterCode=s(row['Chapter']),chapterInfo=chapterLookup[chapterCode]||null,chapterDesc=s(row['Chapter Description'])||s(chapterInfo&&chapterInfo.description),chapterId=chapterCode||BLANK_CHAPTER_FILTER,chapterLabel=mindMapChapterLabel(chapterCode,chapterDesc),task=mainPageTaskText(row),jobNo=s(row['Job No']),job={ id:String(row.__rowId), rowId:String(row.__rowId), label:jobNo||mindMapClip(task,40)||('Entry '+String(Number(row.__rowId)+1)), jobNo:jobNo, task:task, date:formatDateDisplay(row['Date']), sortDate:parseDate(row['Date']), reg:reg, type:type, group:group, chapter:chapterCode, chapterDesc:chapterDesc, chapterLabel:chapterLabel };
+          jobs.push(job);
+          groupBucket.entryCount++;
+          groupBucket.jobs.push(job);
+          groupBucket._types[type]=type;
+          groupBucket._chapters[chapterLabel]=chapterLabel;
+          groupBucket._chapterItems[chapterId]={ id:chapterId, label:chapterLabel };
+          if(reg) groupBucket._regs[reg]=reg;
+          if(!typesMap[type]) typesMap[type]={ id:type, label:type, entryCount:0, jobs:[], _groups:Object.create(null), _chapters:Object.create(null), _regs:Object.create(null) };
+          typesMap[type].entryCount++;
+          typesMap[type].jobs.push(job);
+          typesMap[type]._groups[group]=group;
+          typesMap[type]._chapters[chapterLabel]=chapterLabel;
+          if(reg) typesMap[type]._regs[reg]=reg;
+          if(!chaptersMap[chapterId]) chaptersMap[chapterId]={ id:chapterId, chapter:chapterCode||BLANK_CHAPTER_FILTER, description:chapterDesc, label:chapterLabel, entryCount:0, jobs:[], _groups:Object.create(null), _types:Object.create(null), _regs:Object.create(null) };
+          chaptersMap[chapterId].entryCount++;
+          chaptersMap[chapterId].jobs.push(job);
+          chaptersMap[chapterId]._groups[group]=group;
+          chaptersMap[chapterId]._types[type]=type;
+          if(reg) chaptersMap[chapterId]._regs[reg]=reg;
+          if(!chaptersMap[chapterId].description&&chapterDesc) chaptersMap[chapterId].description=chapterDesc;
+        }
+        ensureGroupBucket('Ungrouped');
+        var groups=[],groupKey;
+        for(groupKey in groupsMap) if(Object.prototype.hasOwnProperty.call(groupsMap,groupKey)){
+          var groupItem=groupsMap[groupKey];
+          groupItem.label=normalizeMindMapGroupLabel(groupItem.label);
+          groupItem.id=groupItem.label;
+          groupItem.aircraftTypes=Object.keys(groupItem._types).sort(mindMapTextSort);
+          groupItem.chapters=Object.keys(groupItem._chapters).sort(mindMapChapterTextSort);
+          groupItem.chapterItems=Object.keys(groupItem._chapterItems).map(function(itemKey){ return groupItem._chapterItems[itemKey]; }).sort(function(a,b){ return mindMapChapterTextSort(a&&a.label,b&&b.label); });
+          groupItem.registrations=Object.keys(groupItem._regs).sort(mindMapTextSort);
+          groupItem.jobs.sort(mindMapJobSort);
+          groupItem.typeItems=buildMindMapGroupTypeItems(groupItem);
+          delete groupItem._types;
+          delete groupItem._chapters;
+          delete groupItem._chapterItems;
+          delete groupItem._regs;
+          groups.push(groupItem);
+        }
+        groups.sort(mindMapGroupSort);
+        var types=[],typeKey;
+        for(typeKey in typesMap) if(Object.prototype.hasOwnProperty.call(typesMap,typeKey)){
+          var typeItem=typesMap[typeKey];
+          typeItem.aircraftGroups=Object.keys(typeItem._groups).sort(mindMapTextSort);
+          typeItem.chapters=Object.keys(typeItem._chapters).sort(mindMapChapterTextSort);
+          typeItem.registrations=Object.keys(typeItem._regs).sort(mindMapTextSort);
+          typeItem.jobs.sort(mindMapJobSort);
+          delete typeItem._groups;
+          delete typeItem._chapters;
+          delete typeItem._regs;
+          types.push(typeItem);
+        }
+        types.sort(function(a,b){ return mindMapTextSort(a.label,b.label); });
+        var chapters=[],chapterKey;
+        for(chapterKey in chaptersMap) if(Object.prototype.hasOwnProperty.call(chaptersMap,chapterKey)){
+          var chapterItem=chaptersMap[chapterKey];
+          chapterItem.aircraftGroups=Object.keys(chapterItem._groups).sort(mindMapTextSort);
+          chapterItem.aircraftTypes=Object.keys(chapterItem._types).sort(mindMapTextSort);
+          chapterItem.registrations=Object.keys(chapterItem._regs).sort(mindMapTextSort);
+          chapterItem.jobs.sort(mindMapJobSort);
+          delete chapterItem._groups;
+          delete chapterItem._types;
+          delete chapterItem._regs;
+          chapters.push(chapterItem);
+        }
+        chapters.sort(mindMapChapterSort);
+        jobs.sort(mindMapJobSort);
+        return { entryCount:list.length, groupCount:groups.length, typeCount:types.length, chapterCount:chapters.length, jobCount:jobs.length, groups:groups, types:types, chapters:chapters, jobs:jobs };
+      }
+      function resolveMindMapSelection(summary){
+        var kind=s(mindMapState.selectedKind)||'root',id=s(mindMapState.selectedId)||'overview',item=null,i,list=null,group=null,typeItem=null,regItem=null;
+        if(kind==='group') list=summary.groups;
+        else if(kind==='type') list=summary.types;
+        else if(kind==='chapter') list=summary.chapters;
+        else if(kind==='group-type'){
+          group=findMindMapGroup(summary,mindMapState.focusGroupId);
+          list=group&&group.typeItems;
+        } else if(kind==='group-reg'){
+          group=findMindMapGroup(summary,mindMapState.focusGroupId);
+          typeItem=findMindMapGroupType(group,mindMapState.focusTypeId);
+          list=typeItem&&(typeItem.chapterItems||typeItem.regItems);
+        } else if(kind==='group-chapter'){
+          group=findMindMapGroup(summary,mindMapState.focusGroupId);
+          typeItem=findMindMapGroupType(group,mindMapState.focusTypeId);
+          regItem=findMindMapTypeChapter(typeItem,mindMapState.focusRegId);
+          list=regItem&&regItem.chapterItems;
+        }
+        if(list){ for(i=0;i<list.length;i++){ if(s(list[i].id)===id){ item=list[i]; break; } } }
+        if(!item){ kind='root'; id='overview'; item=summary; }
+        mindMapState.selectedKind=kind;
+        mindMapState.selectedId=id;
+        return { kind:kind, id:id, item:item, group:group, type:typeItem, reg:regItem };
+      }
+      function renderMindMapCanvas(summary){
+        var layout=buildMindMapLayout(summary),links=[],hubs=[],nodes=[],i;
+        mindMapState.layout=layout;
+        for(i=0;i<layout.links.length;i++) links.push('<path class="mindmap-link '+esc(layout.links[i].className||'')+'" data-mindmap-link-key="'+esc(layout.links[i].domKey||'')+'" d="'+esc(mindMapConnectorPath(layout.links[i].fromX,layout.links[i].fromY,layout.links[i].toX,layout.links[i].toY))+'"></path>');
+        for(i=0;i<layout.hubs.length;i++) hubs.push(renderMindMapSceneHub(layout.hubs[i]));
+        for(i=0;i<layout.nodes.length;i++) nodes.push(renderMindMapSceneNode(layout.nodes[i]));
+        return '<div class="mindmap-stage">'+
+          renderMindMapToolbar()+
+          '<div class="mindmap-viewport" data-mindmap-viewport="1">'+
+            '<div class="mindmap-scene" data-mindmap-scene="1" data-root-x="'+esc(layout.rootX)+'" data-root-y="'+esc(layout.rootY)+'" style="width:'+layout.sceneWidth+'px;height:'+layout.sceneHeight+'px;">'+
+              '<svg class="mindmap-links" viewBox="0 0 '+layout.sceneWidth+' '+layout.sceneHeight+'" width="'+layout.sceneWidth+'" height="'+layout.sceneHeight+'" aria-hidden="true">'+links.join('')+'</svg>'+
+              hubs.join('')+
+              nodes.join('')+
+            '</div>'+
+          '</div>'+
+          '<div class="mindmap-scene-hint">Drag the canvas to move around, drag a group node to reposition it, and keep several groups open at once. Pick an A/C type to load its chapters and jobs in the side notes panel.</div>'+
+        '</div>';
+      }
+      function renderMindMapOverviewDetail(summary){
+        if(!summary.entryCount) return '<div class="mindmap-empty">No logbook entries are loaded yet. Import or add CAP 741 rows and the mind map will build itself from the live data.</div>';
+        var chapterCards=[],i;
+        for(i=0;i<summary.chapters.length;i++){
+          var chapter=summary.chapters[i],includes=chapter.aircraftTypes.length?('Includes: '+mindMapClip(chapter.aircraftTypes.join(', '),110)):'No aircraft types recorded yet.',copy=(chapter.description?chapter.description+'. ':'')+includes;
+          chapterCards.push(mindMapDetailCardHtml('chapter',chapter.id,chapter.label,chapter.entryCount+' entries | '+chapter.aircraftGroups.length+' groups',copy));
+        }
+        return '<p class="mindmap-detail-head-label">Overview</p><h3 class="mindmap-detail-title">Logbook Snapshot</h3><p class="mindmap-detail-copy">Live totals.</p><div class="mindmap-metrics">'+mindMapMetricHtml('Entries',summary.entryCount)+mindMapMetricHtml('Chapters',summary.chapterCount)+mindMapMetricHtml('Groups',summary.groupCount)+mindMapMetricHtml('Types',summary.typeCount)+'</div><section class="mindmap-detail-section"><h4 class="mindmap-detail-section-title">What Each Chapter Includes</h4><div class="mindmap-detail-cards">'+chapterCards.join('')+'</div></section>';
+      }
+      function renderMindMapGroupDetail(group){
+        return '<p class="mindmap-detail-head-label">Aircraft Group</p><h3 class="mindmap-detail-title">'+esc(group.label)+'</h3><p class="mindmap-detail-copy">Group summary.</p><div class="mindmap-metrics">'+mindMapMetricHtml('Entries',group.entryCount)+mindMapMetricHtml('A/C Types',group.aircraftTypes.length)+mindMapMetricHtml('Regs',group.registrations.length)+mindMapMetricHtml('Chapters',group.chapters.length)+'</div><section class="mindmap-detail-section"><h4 class="mindmap-detail-section-title">Aircraft Types</h4>'+mindMapPillListHtml(group.aircraftTypes,'No aircraft types recorded in this group.')+'</section><section class="mindmap-detail-section"><h4 class="mindmap-detail-section-title">Registrations</h4>'+mindMapPillListHtml(group.registrations,'No registrations recorded in this group.')+'</section><section class="mindmap-detail-section"><h4 class="mindmap-detail-section-title">Chapters</h4>'+mindMapPillListHtml(group.chapters,'No chapters recorded in this group.')+'</section>';
+      }
+      function renderMindMapTypeDetail(type){
+        return '<p class="mindmap-detail-head-label">Aircraft Type</p><h3 class="mindmap-detail-title">'+esc(type.label)+'</h3><p class="mindmap-detail-copy">Type summary.</p><div class="mindmap-metrics">'+mindMapMetricHtml('Entries',type.entryCount)+mindMapMetricHtml('Groups',type.aircraftGroups.length)+mindMapMetricHtml('Regs',type.registrations.length)+mindMapMetricHtml('Chapters',type.chapters.length)+'</div><section class="mindmap-detail-section"><h4 class="mindmap-detail-section-title">Aircraft Groups</h4>'+mindMapPillListHtml(type.aircraftGroups,'No aircraft groups recorded for this type.')+'</section><section class="mindmap-detail-section"><h4 class="mindmap-detail-section-title">Registrations</h4>'+mindMapPillListHtml(type.registrations,'No registrations recorded for this type.')+'</section><section class="mindmap-detail-section"><h4 class="mindmap-detail-section-title">Chapters</h4>'+mindMapPillListHtml(type.chapters,'No chapters recorded for this type.')+'</section>';
+      }
+      function renderMindMapGroupTypeDetail(type, group){
+        return '<p class="mindmap-detail-head-label">Group Type</p><h3 class="mindmap-detail-title">'+esc(type.label)+'</h3><p class="mindmap-detail-copy">Pick a chapter below.</p><div class="mindmap-metrics">'+mindMapMetricHtml('Entries',type.entryCount)+mindMapMetricHtml('Chapters',(type.chapterItems||type.regItems||[]).length)+mindMapMetricHtml('Regs',type.registrations.length)+mindMapMetricHtml('Jobs',type.jobs.length)+'</div><section class="mindmap-detail-section"><h4 class="mindmap-detail-section-title">Chapter List</h4>'+mindMapChapterAccordionListHtml(type.chapterItems||type.regItems,'No chapters recorded for this type in the selected group.')+'</section><section class="mindmap-detail-section"><h4 class="mindmap-detail-section-title">Registrations</h4>'+mindMapPillListHtml(type.registrations,'No registrations recorded for this type in the selected group.')+'</section>';
+      }
+      function renderMindMapGroupRegDetail(regItem, type, group){
+        var jobLinks=[],i;
+        for(i=0;i<regItem.jobs.length;i++) jobLinks.push(mindMapJobLinkHtml(regItem.jobs[i]));
+        return '<p class="mindmap-detail-head-label">Chapter</p><h3 class="mindmap-detail-title">'+esc(regItem.label)+'</h3><p class="mindmap-detail-copy">Chapter summary.</p><div class="mindmap-metrics">'+mindMapMetricHtml('Entries',regItem.entryCount)+mindMapMetricHtml('Jobs',regItem.jobs.length)+mindMapMetricHtml('Regs',(regItem.registrations||[]).length)+mindMapMetricHtml('Type',type&&type.label||'')+'</div><section class="mindmap-detail-section"><h4 class="mindmap-detail-section-title">Registrations</h4>'+mindMapPillListHtml(regItem.registrations,'No registrations recorded in this chapter.')+'</section><section class="mindmap-detail-section"><h4 class="mindmap-detail-section-title">Jobs In This Chapter</h4><div class="mindmap-job-links">'+(jobLinks.join('')||'<div class="mindmap-empty-mini">No jobs recorded in this chapter.</div>')+'</div></section>';
+      }
+      function renderMindMapGroupChapterDetail(chapter, regItem, type, group){
+        var jobLinks=[],i;
+        for(i=0;i<chapter.jobs.length;i++) jobLinks.push(mindMapJobLinkHtml(chapter.jobs[i]));
+        return '<p class="mindmap-detail-head-label">Chapter</p><h3 class="mindmap-detail-title">'+esc(chapter.label)+'</h3><p class="mindmap-detail-copy">This chapter is under '+esc(regItem&&regItem.label||'the selected registration')+' for '+esc(type&&type.label||'the selected type')+' in '+esc(group&&group.label||'the selected group')+'.</p><div class="mindmap-metrics">'+mindMapMetricHtml('Entries',chapter.entryCount)+mindMapMetricHtml('Jobs',chapter.jobs.length)+mindMapMetricHtml('Registration',regItem&&regItem.label||'')+mindMapMetricHtml('Group',group&&group.label||'')+'</div><section class="mindmap-detail-section"><h4 class="mindmap-detail-section-title">Jobs In This Chapter</h4><div class="mindmap-job-links">'+(jobLinks.join('')||'<div class="mindmap-empty-mini">No jobs recorded in this chapter.</div>')+'</div></section>';
+      }
+      function renderMindMapChapterDetail(chapter){
+        var jobLinks=[],i;
+        for(i=0;i<chapter.jobs.length;i++) jobLinks.push(mindMapJobLinkHtml(chapter.jobs[i]));
+        return '<p class="mindmap-detail-head-label">Chapter</p><h3 class="mindmap-detail-title">'+esc(chapter.label)+'</h3><p class="mindmap-detail-copy">'+esc(chapter.description||'Chapter usage.')+'</p><div class="mindmap-metrics">'+mindMapMetricHtml('Entries',chapter.entryCount)+mindMapMetricHtml('Groups',chapter.aircraftGroups.length)+mindMapMetricHtml('Types',chapter.aircraftTypes.length)+mindMapMetricHtml('Jobs',chapter.jobs.length)+'</div><section class="mindmap-detail-section"><h4 class="mindmap-detail-section-title">Aircraft Groups</h4>'+mindMapPillListHtml(chapter.aircraftGroups,'No aircraft groups recorded in this chapter.')+'</section><section class="mindmap-detail-section"><h4 class="mindmap-detail-section-title">Aircraft Types</h4>'+mindMapPillListHtml(chapter.aircraftTypes,'No aircraft types recorded in this chapter.')+'</section><section class="mindmap-detail-section"><h4 class="mindmap-detail-section-title">Jobs In This Chapter</h4><div class="mindmap-job-links">'+(jobLinks.join('')||'<div class="mindmap-empty-mini">No jobs recorded in this chapter.</div>')+'</div></section>';
+      }
+      function renderMindMapDetail(summary){
+        var selection=resolveMindMapSelection(summary);
+        if(selection.kind==='group') return renderMindMapGroupDetail(selection.item);
+        if(selection.kind==='group-type') return renderMindMapGroupTypeDetail(selection.item,selection.group);
+        if(selection.kind==='group-reg') return renderMindMapGroupRegDetail(selection.item,selection.type,selection.group);
+        if(selection.kind==='group-chapter') return renderMindMapGroupChapterDetail(selection.item,selection.reg,selection.type,selection.group);
+        if(selection.kind==='type') return renderMindMapTypeDetail(selection.item);
+        if(selection.kind==='chapter') return renderMindMapChapterDetail(selection.item);
+        return renderMindMapOverviewDetail(summary);
+      }
+      function renderMindMapDetailPanel(summary){
+        return '<div class="mindmap-detail-bar"><p class="mindmap-detail-bar-label">Side Notes</p><button class="mindmap-detail-close" type="button" data-mindmap-detail-toggle="1">Hide</button></div>'+renderMindMapDetail(summary);
+      }
+      function renderMindMapModal(){
+        var summary=mindMapState.summary||buildMindMapSummary();
+        mindMapState.summary=summary;
+        if(mindMapCanvasEl){ mindMapCanvasEl.innerHTML=renderMindMapCanvas(summary); syncMindMapView(); }
+        if(mindMapShellEl) mindMapShellEl.classList.toggle('is-detail-closed',!!mindMapState.detailClosed);
+        if(mindMapDetailEl){
+          mindMapDetailEl.className='mindmap-detail'+(mindMapState.detailClosed?' is-closed':'');
+          mindMapDetailEl.hidden=!!mindMapState.detailClosed;
+          mindMapDetailEl.innerHTML=mindMapState.detailClosed?'':renderMindMapDetailPanel(summary);
+        }
+      }
+      function setMindMapDetailClosed(closed){
+        mindMapState.detailClosed=!!closed;
+        renderMindMapModal();
+      }
+      function openMindMapFeature(){
+        var view=mindMapViewState();
+        view.scale=0.76;
+        view.x=0;
+        view.y=0;
+        view.dragging=false;
+        view.pointerId=null;
+        view.needsCenter=true;
+        mindMapState.expandedGroups=Object.create(null);
+        mindMapState.nodeOffsets=Object.create(null);
+        mindMapState.nodeDrag=null;
+        mindMapState.detailClosed=false;
+        mindMapState.suppressClickUntil=0;
+        mindMapState.focusGroupId='';
+        mindMapState.focusTypeId='';
+        mindMapState.focusRegId='';
+        mindMapState.focusChapterId='';
+        mindMapState.summary=buildMindMapSummary();
+        mindMapState.selectedKind='root';
+        mindMapState.selectedId='overview';
+        if(mindMapModal) mindMapModal.className='modal-backdrop open';
+        renderMindMapModal();
+        setTimeout(function(){
+          fitMindMapScale(0.76);
+          centerMindMapView(true);
+          var firstNode=mindMapCanvasEl&&mindMapCanvasEl.querySelector('[data-mindmap-node-kind="group"]');
+          if(firstNode&&typeof firstNode.focus==='function') firstNode.focus();
+        },0);
+      }
+      function closeMindMapModal(){ var view=mindMapViewState(); view.dragging=false; view.pointerId=null; mindMapState.nodeDrag=null; if(mindMapModal) mindMapModal.className='modal-backdrop'; syncMindMapView(); }
+      function selectMindMapNode(kind, id, groupId, typeId, regId){
+        var nextKind=s(kind)||'root',nextId=s(id)||'overview',nextGroup=s(groupId),sameGroup,nextType,nextReg,sameType,sameReg,sameChapter,expandedGroups=mindMapExpandedGroups();
+        if(nextKind==='group'){
+          sameGroup=!!expandedGroups[nextId];
+          if(sameGroup){
+            delete expandedGroups[nextId];
+            if(s(mindMapState.focusGroupId)===nextId){
+              mindMapState.focusGroupId='';
+              mindMapState.focusTypeId='';
+              mindMapState.focusRegId='';
+              mindMapState.focusChapterId='';
+              mindMapState.selectedKind='root';
+              mindMapState.selectedId='overview';
+            }
+          } else {
+            expandedGroups[nextId]=1;
+            mindMapState.focusGroupId=nextId;
+            mindMapState.focusTypeId='';
+            mindMapState.focusRegId='';
+            mindMapState.focusChapterId='';
+            mindMapState.selectedKind='group';
+            mindMapState.selectedId=nextId;
+          }
+          renderMindMapModal();
+          return;
+        }
+        if(nextKind==='group-type'){
+          nextType=nextId;
+          if(!nextGroup) nextGroup=s(mindMapState.focusGroupId);
+          expandedGroups[nextGroup]=1;
+          sameType=s(mindMapState.focusGroupId)===nextGroup&&s(mindMapState.focusTypeId)===nextType&&s(mindMapState.focusRegId)==='';
+          mindMapState.focusGroupId=nextGroup;
+          mindMapState.focusTypeId=sameType?'':nextType;
+          mindMapState.focusRegId='';
+          mindMapState.focusChapterId='';
+          mindMapState.selectedKind=sameType?'group':'group-type';
+          mindMapState.selectedId=sameType?nextGroup:nextType;
+          renderMindMapModal();
+          return;
+        }
+        if(nextKind==='group-reg'){
+          nextReg=nextId;
+          if(!nextGroup) nextGroup=s(mindMapState.focusGroupId);
+          if(!typeId) typeId=s(mindMapState.focusTypeId);
+          sameReg=s(mindMapState.focusGroupId)===nextGroup&&s(mindMapState.focusTypeId)===s(typeId)&&s(mindMapState.focusRegId)===nextReg&&s(mindMapState.focusChapterId)==='';
+          mindMapState.focusGroupId=nextGroup;
+          mindMapState.focusTypeId=s(typeId);
+          mindMapState.focusRegId=sameReg?'':nextReg;
+          mindMapState.focusChapterId='';
+          mindMapState.selectedKind=sameReg?'group-type':'group-reg';
+          mindMapState.selectedId=sameReg?s(typeId):nextReg;
+          renderMindMapModal();
+          return;
+        }
+        if(nextKind==='group-chapter'){
+          if(!nextGroup) nextGroup=s(mindMapState.focusGroupId);
+          if(!typeId) typeId=s(mindMapState.focusTypeId);
+          if(!regId) regId=s(mindMapState.focusRegId);
+          sameChapter=s(mindMapState.focusGroupId)===nextGroup&&s(mindMapState.focusTypeId)===s(typeId)&&s(mindMapState.focusRegId)===s(regId)&&s(mindMapState.focusChapterId)===nextId;
+          mindMapState.focusGroupId=nextGroup;
+          mindMapState.focusTypeId=s(typeId);
+          mindMapState.focusRegId=s(regId);
+          mindMapState.focusChapterId=sameChapter?'':nextId;
+          mindMapState.selectedKind=sameChapter?'group-reg':'group-chapter';
+          mindMapState.selectedId=sameChapter?s(regId):nextId;
+          renderMindMapModal();
+          return;
+        }
+        if(nextKind!=='group') mindMapState.focusGroupId='';
+        mindMapState.focusTypeId='';
+        mindMapState.focusRegId='';
+        mindMapState.focusChapterId='';
+        mindMapState.selectedKind=nextKind;
+        mindMapState.selectedId=nextId;
+        renderMindMapModal();
+      }
+      function clearMindMapRowHighlight(){
+        if(!pagesEl) return;
+        var highlighted=pagesEl.querySelectorAll('.mindmap-row-target');
+        for(var i=0;i<highlighted.length;i++) highlighted[i].classList.remove('mindmap-row-target');
+      }
+      async function jumpToMindMapRow(rowId){
+        rowId=s(rowId);
+        if(!rowId||!rowById(rowId)){ fail('Could not find that logbook job.'); return; }
+        closeMindMapModal();
+        var rowSelector='[data-row-key="row-'+rowId+'"]',rowEl=pagesEl&&pagesEl.querySelector(rowSelector);
+        if(!rowEl&&(hasActiveFilters()||hasActiveSearch())){
+          activeFilters=emptyFilterState();
+          draftFilters=emptyFilterState();
+          applySearchQuery('');
+          renderAll();
+          await nextPaint();
+          note('Filters and search were cleared so the selected job could be shown.');
+          rowEl=pagesEl&&pagesEl.querySelector(rowSelector);
+        }
+        if(!rowEl){
+          renderAll();
+          await nextPaint();
+          rowEl=pagesEl&&pagesEl.querySelector(rowSelector);
+        }
+        if(!rowEl){ fail('Could not jump to the selected job in the logbook.'); return; }
+        clearMindMapRowHighlight();
+        rowEl.classList.add('mindmap-row-target');
+        if(typeof rowEl.scrollIntoView==='function') rowEl.scrollIntoView({behavior:'smooth',block:'center'});
+        clearTimeout(mindMapRowHighlightTimer);
+        mindMapRowHighlightTimer=setTimeout(function(){ rowEl.classList.remove('mindmap-row-target'); },2200);
+      }
+      function handleMindMapInteraction(target){
+        if((Number(mindMapState.suppressClickUntil)||0)>Date.now()) return true;
+        var zoomBtn=target&&target.closest&&target.closest('[data-mindmap-zoom]');
+        if(zoomBtn){
+          var action=zoomBtn.getAttribute('data-mindmap-zoom');
+          if(action==='in') zoomMindMapBy(1.12);
+          else if(action==='out') zoomMindMapBy(1/1.12);
+          else resetMindMapView();
+          return true;
+        }
+        var detailToggleBtn=target&&target.closest&&target.closest('[data-mindmap-detail-toggle]');
+        if(detailToggleBtn){ setMindMapDetailClosed(!mindMapState.detailClosed); return true; }
+        var jobBtn=target&&target.closest&&target.closest('[data-mindmap-job-row-id]');
+        if(jobBtn){ jumpToMindMapRow(jobBtn.getAttribute('data-mindmap-job-row-id')); return true; }
+        var nodeBtn=target&&target.closest&&target.closest('[data-mindmap-node-kind]');
+        if(nodeBtn){ selectMindMapNode(nodeBtn.getAttribute('data-mindmap-node-kind'),nodeBtn.getAttribute('data-mindmap-node-id'),nodeBtn.getAttribute('data-mindmap-group-id'),nodeBtn.getAttribute('data-mindmap-type-id'),nodeBtn.getAttribute('data-mindmap-reg-id')); return true; }
+        return false;
+      }
       function readFilterForm(){ commitPendingDraftInputs(); return cloneFilterState(draftFilters); }
       function clearFilters(){ activeFilters=emptyFilterState(); draftFilters=emptyFilterState(); resetDraftFilters(); renderAll(); }
       function applySearchQuery(value){
@@ -2204,6 +3032,44 @@
       // ---- Event handlers ----
       filterBtn.onclick=function(){ openFilterPanel(); };
       if(mindMapBtn) mindMapBtn.onclick=function(ev){ if(ev) ev.stopPropagation(); setLoadOptionsOpen(false); setPrintOptionsOpen(false); openMindMapFeature(); };
+      if(closeMindMapModalBtn) closeMindMapModalBtn.onclick=function(){ closeMindMapModal(); };
+      if(mindMapModal) mindMapModal.onclick=function(ev){ if(handleMindMapInteraction(ev.target)) return; if(ev.target===mindMapModal) closeMindMapModal(); };
+      if(mindMapCanvasEl) mindMapCanvasEl.addEventListener('wheel',handleMindMapWheelEvent,{passive:false});
+      if(mindMapCanvasEl) mindMapCanvasEl.addEventListener('pointerdown',function(ev){
+        var viewport=currentMindMapViewport(),draggableNode=ev.target&&ev.target.closest&&ev.target.closest('[data-mindmap-draggable="1"]');
+        if(!viewport||!viewport.contains(ev.target)) return;
+        if(typeof ev.button==='number'&&ev.button!==0&&ev.pointerType!=='touch') return;
+        if(draggableNode&&!(ev.target&&ev.target.closest&&ev.target.closest('[data-mindmap-inline-action="1"]'))){
+          ev.preventDefault();
+          beginMindMapNodeDrag(draggableNode.getAttribute('data-mindmap-node-key'),ev.pointerId,ev.clientX,ev.clientY);
+          return;
+        }
+        if(!canStartMindMapDrag(ev.target)) return;
+        ev.preventDefault();
+        beginMindMapDrag(ev.pointerId,ev.clientX,ev.clientY);
+      });
+      if(mindMapCanvasEl) mindMapCanvasEl.addEventListener('pointermove',function(ev){
+        var view=mindMapViewState(),nodeDrag=mindMapState.nodeDrag;
+        if(nodeDrag&&nodeDrag.pointerId===ev.pointerId){
+          ev.preventDefault();
+          updateMindMapNodeDrag(ev.clientX,ev.clientY);
+          return;
+        }
+        if(!view.dragging||view.pointerId!==ev.pointerId) return;
+        ev.preventDefault();
+        updateMindMapDrag(ev.clientX,ev.clientY);
+      });
+      if(mindMapCanvasEl) ['pointerup','pointercancel','lostpointercapture'].forEach(function(eventName){
+        mindMapCanvasEl.addEventListener(eventName,function(ev){
+          var view=mindMapViewState(),nodeDrag=mindMapState.nodeDrag;
+          if(nodeDrag&&nodeDrag.pointerId===ev.pointerId){
+            endMindMapNodeDrag(ev.pointerId);
+            return;
+          }
+          if(!view.dragging||view.pointerId!==ev.pointerId) return;
+          endMindMapDrag(ev.pointerId);
+        });
+      });
       closeFilterPanelBtn.onclick=function(){ closeFilterPanel(); };
       clearFiltersBtn.onclick=function(){ resetDraftFilters(); };
       filterForm.onsubmit=function(ev){ ev.preventDefault(); activeFilters=readFilterForm(); closeFilterPanel(); renderAll(); };
@@ -2318,6 +3184,13 @@
         input.addEventListener('input',function(){ updateOtherLayoutPreview(previewOtherLayoutMeasurements()); });
       });
       window.addEventListener('resize',function(){ if(otherLayoutModal&&otherLayoutModal.classList.contains('open')) requestAnimationFrame(syncOtherOverlaySampleGuide); });
+      window.addEventListener('resize',function(){
+        if(!mindMapModal||!mindMapModal.classList.contains('open')) return;
+        requestAnimationFrame(function(){
+          centerMindMapView(false);
+          syncMindMapView();
+        });
+      });
       if(closeGoogleSheetModalBtn) closeGoogleSheetModalBtn.onclick=function(){ closeGoogleSheetModal(null); };
       if(googleSheetCancelBtn) googleSheetCancelBtn.onclick=function(){ closeGoogleSheetModal(null); };
       if(googleSheetOkBtn) googleSheetOkBtn.onclick=function(){ closeGoogleSheetModal(googleSheetInputWrapEl&&!googleSheetInputWrapEl.hidden&&googleSheetUrlInputEl?googleSheetUrlInputEl.value:true); };
@@ -2338,6 +3211,12 @@
         var insideLoad=!!(ev.target.closest&&(ev.target.closest('#loadBtn')||ev.target.closest('#loadOptions')));
         if(!insidePrint) setPrintOptionsOpen(false);
         if(!insideLoad) setLoadOptionsOpen(false);
+      });
+      document.addEventListener('keydown',function(ev){
+        if(ev.key==='Escape'&&mindMapModal&&mindMapModal.className.indexOf('open')!==-1){
+          ev.preventDefault();
+          closeMindMapModal();
+        }
       });
 
       // Save button - write xlsx
