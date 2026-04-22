@@ -780,7 +780,7 @@ button.mindmap-node { cursor:pointer; }
       }
       table.sheet th,
       table.sheet td {
-        border-width:.6px;
+        border-width:.5px;
       }
       .sheet tbody tr.slot { break-inside:avoid; page-break-inside:avoid; }
       .field-input, .field-select, .editable-cell, .dots-line .dots-value {
