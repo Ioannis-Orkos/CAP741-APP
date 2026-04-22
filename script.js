@@ -30,7 +30,7 @@
       var PAGE_GROUPING_GROUP = 'group';
       var FLAG_SECTION_PRIMARY = 'Primary';
       var FLAG_SECTION_MORE = 'More';
-      var DEFAULT_APP_VIEW_SETTINGS = { showMindMap: true, pageGrouping: PAGE_GROUPING_TYPE };
+      var DEFAULT_APP_VIEW_SETTINGS = { showMindMap: false, pageGrouping: PAGE_GROUPING_TYPE };
       var APP_VIEW_SETTINGS = { showMindMap: DEFAULT_APP_VIEW_SETTINGS.showMindMap, pageGrouping: DEFAULT_APP_VIEW_SETTINGS.pageGrouping };
       var SUPERVISOR_OPTIONS = [];
       var SUPERVISOR_LOOKUP = Object.create(null);
