@@ -453,25 +453,25 @@
       .filter-actions { grid-column:1 / -1; }
     }
 
-.mindmap-card { position:relative; width:min(1280px, calc(100vw - 28px)); max-height:calc(100vh - 28px); overflow:hidden; background-color:#fff; border:1px solid #d7dee5; box-shadow:0 24px 44px rgba(32,56,79,.2); padding:20px; display:flex; flex-direction:column; }
+.mindmap-card { position:relative; width:min(1280px, calc(100vw - 28px)); height:min(820px, calc(100dvh - 28px)); max-height:calc(100dvh - 28px); overflow:hidden; background-color:#fff; border:1px solid #d7dee5; box-shadow:0 24px 44px rgba(32,56,79,.2); padding:20px; display:flex; flex-direction:column; }
 .mindmap-close { position:absolute; top:12px; right:12px; width:30px; height:30px; border:1px solid #d7dee5; border-radius:10px; background:#f6f7f8; color:#17374a; font:13px/28px Arial, Helvetica, sans-serif; cursor:pointer; }
 .mindmap-close:hover { background:#eef3f6; }
 .mindmap-head { margin-right:42px; }
 .mindmap-title { margin:0; font-size:22px; font-weight:700; color:#102836; }
 .mindmap-copy { margin:6px 0 0; max-width:760px; font-size:12px; line-height:1.5; color:#52697a; }
-.mindmap-shell { margin-top:16px; flex:1 1 auto; min-height:0; display:grid; grid-template-columns:minmax(0, 2.1fr) minmax(300px, 360px); gap:18px; align-items:stretch; }
+.mindmap-shell { margin-top:16px; flex:1 1 auto; min-height:0; display:grid; grid-template-columns:minmax(0, 2.1fr) minmax(300px, 360px); gap:18px; align-items:stretch; overflow:hidden; }
 .mindmap-shell.is-detail-closed { grid-template-columns:1fr; }
-.mindmap-canvas { min-height:0; overflow:hidden; position:relative; border:1px solid rgba(177,196,209,.86); border-radius:28px; padding:0; background-color:#f5f9fc; box-shadow:inset 0 1px 0 rgba(255,255,255,.86), 0 18px 34px rgba(32,56,79,.08); }
+.mindmap-canvas { min-height:0; height:100%; overflow:hidden; position:relative; border:1px solid rgba(177,196,209,.86); border-radius:28px; padding:0; background-color:#f5f9fc; box-shadow:inset 0 1px 0 rgba(255,255,255,.86), 0 18px 34px rgba(32,56,79,.08); }
 .mindmap-canvas::before { content:''; position:absolute; inset:0; pointer-events:none; background-image:linear-gradient(rgba(121,146,161,.12) 1px, transparent 1px), linear-gradient(90deg, rgba(121,146,161,.12) 1px, transparent 1px); background-size:20px 20px; opacity:.86; }
 .mindmap-canvas::after { content:''; position:absolute; inset:0; pointer-events:none; background:none; }
-.mindmap-stage { position:relative; min-height:640px; height:100%; display:flex; flex-direction:column; }
+.mindmap-stage { position:relative; min-height:0; height:100%; display:flex; flex-direction:column; }
 .mindmap-toolbar { position:absolute; top:16px; left:16px; z-index:4; display:flex; align-items:center; gap:8px; padding:10px 12px; border:1px solid rgba(176,192,205,.95); border-radius:20px; background:rgba(255,255,255,.84); box-shadow:0 16px 30px rgba(32,56,79,.12); backdrop-filter:blur(14px); }
 .mindmap-tool-btn { min-width:40px; height:40px; border:1px solid #c8d3da; border-radius:12px; background-color:#fff; color:#17374a; font:700 14px/1 Arial, Helvetica, sans-serif; cursor:pointer; padding:0 12px; transition:transform .16s ease, box-shadow .16s ease, border-color .16s ease, background-color .16s ease; }
 .mindmap-tool-btn:hover { transform:translateY(-1px); border-color:#a9bcc8; background-color:#f3f7fa; box-shadow:0 10px 18px rgba(32,56,79,.12); }
 .mindmap-tool-btn-reset { min-width:74px; font-size:12px; }
 .mindmap-tool-btn-details { min-width:94px; font-size:12px; }
 .mindmap-zoom-label { min-width:54px; text-align:center; font-size:11px; line-height:1; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#486270; }
-.mindmap-viewport { position:relative; flex:1 1 auto; min-height:560px; overflow:hidden; border-radius:28px; cursor:grab; touch-action:none; }
+.mindmap-viewport { position:relative; flex:1 1 auto; min-height:0; height:100%; overflow:hidden; border-radius:28px; cursor:grab; touch-action:none; }
 .mindmap-viewport.is-dragging { cursor:grabbing; }
 .mindmap-scene { position:absolute; left:0; top:0; transform-origin:0 0; will-change:transform; }
 .mindmap-links { position:absolute; inset:0; overflow:visible; pointer-events:none; filter:drop-shadow(0 1px 0 rgba(255,255,255,.35)); }
@@ -573,10 +573,10 @@ button.mindmap-node { cursor:pointer; }
   .mindmap-scene-node { animation:none; }
 }
 @media (max-width: 980px) {
-  .mindmap-card { width:calc(100vw - 20px); padding:18px 16px 16px; }
-  .mindmap-shell { grid-template-columns:1fr; }
-  .mindmap-stage { min-height:560px; }
-  .mindmap-viewport { min-height:520px; }
+  .mindmap-card { width:calc(100vw - 20px); height:min(760px, calc(100dvh - 20px)); padding:18px 16px 16px; }
+  .mindmap-shell { grid-template-columns:1fr; grid-template-rows:minmax(0, 1fr) auto; }
+  .mindmap-stage { min-height:320px; }
+  .mindmap-viewport { min-height:280px; height:auto; }
   .mindmap-detail { max-height:38vh; }
 }
 @media (max-width: 720px) {
@@ -584,8 +584,9 @@ button.mindmap-node { cursor:pointer; }
   .mindmap-tool-btn { min-width:36px; height:36px; }
   .mindmap-tool-btn-reset { min-width:66px; }
   .mindmap-tool-btn-details { min-width:84px; }
-  .mindmap-stage { min-height:500px; }
-  .mindmap-viewport { min-height:460px; border-radius:22px; }
+  .mindmap-card { height:min(680px, calc(100dvh - 16px)); }
+  .mindmap-stage { min-height:280px; }
+  .mindmap-viewport { min-height:240px; height:auto; border-radius:22px; }
   .mindmap-node { min-width:160px; max-width:220px; padding:12px 14px; border-radius:20px; }
   .mindmap-scene-node-group, .mindmap-scene-node-group.is-expanded { min-width:250px; max-width:280px; }
   .mindmap-scene-node-root { min-width:250px; width:250px; min-height:250px; padding:24px; }
@@ -594,13 +595,13 @@ button.mindmap-node { cursor:pointer; }
   .mindmap-scene-hint { max-width:calc(100% - 24px); margin:0 12px 12px; border-radius:18px; }
 }
 @media (max-width: 480px) {
-  .mindmap-card { width:calc(100vw - 12px); padding:16px 12px 12px; }
+  .mindmap-card { width:calc(100vw - 12px); height:min(620px, calc(100dvh - 12px)); padding:16px 12px 12px; }
   .mindmap-title { font-size:18px; }
   .mindmap-copy { font-size:10px; }
   .mindmap-detail { padding:14px; border-radius:18px; }
   .mindmap-toolbar { top:auto; left:12px; right:12px; bottom:14px; justify-content:center; }
-  .mindmap-stage { min-height:430px; }
-  .mindmap-viewport { min-height:400px; border-radius:20px; }
+  .mindmap-stage { min-height:240px; }
+  .mindmap-viewport { min-height:210px; height:auto; border-radius:20px; }
   .mindmap-node { min-width:148px; max-width:200px; }
   .mindmap-scene-node-group, .mindmap-scene-node-group.is-expanded { min-width:220px; max-width:250px; }
   .mindmap-scene-node-root { min-width:220px; width:220px; min-height:220px; padding:22px 18px; }
