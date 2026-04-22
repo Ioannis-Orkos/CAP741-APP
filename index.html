@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CAP 741 Section 3.1</title>
-  <link rel="stylesheet" href="style.css?v=20260419d" />
+  <link rel="stylesheet" href="style.css?v=20260422a" />
 </head>
 <body>
   <div class="error" id="errorBox" role="status" aria-live="polite">
@@ -44,6 +44,16 @@
     <span class="filter-count" id="filterCount" hidden>0</span>
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <path fill="currentColor" d="M4 6h16l-6.4 7.2V19l-3.2 1v-6.8L4 6z"/>
+    </svg>
+  </button>
+  <button class="mindmap-fab" id="mindMapBtn" aria-label="Open mind map" title="Open mind map">
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M12 8v3M12 11H7M12 11h5M7 11v5M17 11v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="12" cy="6" r="2" fill="currentColor"/>
+      <circle cx="7" cy="11" r="2" fill="currentColor"/>
+      <circle cx="17" cy="11" r="2" fill="currentColor"/>
+      <circle cx="7" cy="18" r="2" fill="currentColor"/>
+      <circle cx="17" cy="18" r="2" fill="currentColor"/>
     </svg>
   </button>
   <button class="add-fab" id="addBlankPage" aria-label="Add blank page">+</button>
@@ -242,6 +252,6 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
   <script src="data.js?v=20260419c"></script>
   <script src="data-chapter.js?v=20260419a"></script>
-  <script src="script.js?v=20260419e"></script>
+  <script src="script.js?v=20260422a"></script>
 </body>
 </html>

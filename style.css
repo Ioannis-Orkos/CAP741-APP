@@ -19,7 +19,7 @@
     .search-input::placeholder { color:#6a7f8d; opacity:1; }
     .search-clear { flex:0 0 auto; width:26px; height:26px; border:1px solid #d6dee4; border-radius:999px; background:linear-gradient(180deg, #ffffff 0%, #f2f5f7 100%); color:#365466; font:700 10px/1 Arial, Helvetica, sans-serif; cursor:pointer; box-shadow:inset 0 1px 0 rgba(255,255,255,.7); }
     .search-clear:hover { background:linear-gradient(180deg, #ffffff 0%, #eaf0f4 100%); border-color:#c2ced7; }
-    .add-fab, .print-fab, .load-fab, .filter-fab, .save-fab, .settings-fab, .info-fab { position:fixed; width:50px; height:50px; border:0; border-radius:50%; background:#111; color:#fff; cursor:pointer; box-shadow:0 10px 24px rgba(0,0,0,.24); z-index:20; }
+    .add-fab, .print-fab, .load-fab, .filter-fab, .mindmap-fab, .save-fab, .settings-fab, .info-fab { position:fixed; width:50px; height:50px; border:0; border-radius:50%; background:#111; color:#fff; cursor:pointer; box-shadow:0 10px 24px rgba(0,0,0,.24); z-index:20; }
     .load-fab { right:18px; top:138px; font-size:12px; font-weight:700; display:none; transition:transform .18s ease, box-shadow .18s ease, background .18s ease; }
     .load-fab.active { background:#1f4c6b; }
     .load-options { position:fixed; right:78px; top:138px; display:flex; flex-direction:column; gap:8px; opacity:0; pointer-events:none; transform:translateX(8px); transition:transform .18s ease, opacity .18s ease; z-index:21; }
@@ -27,14 +27,16 @@
     .load-option-btn { min-width:160px; min-height:42px; border:1px solid #d7dee5; background:#fff; color:#17374a; box-shadow:0 10px 24px rgba(0,0,0,.14); padding:0 14px; font:700 12px/1 Arial, Helvetica, sans-serif; text-align:left; cursor:pointer; }
     .load-option-btn:hover { background:#f6f7f8; }
     .filter-fab { right:18px; top:calc(50vh - 25px); display:flex; align-items:center; justify-content:center; transition:transform .18s ease, box-shadow .18s ease, background .18s ease; }
-    .filter-fab:hover, .add-fab:hover, .print-fab:hover, .save-fab:hover, .settings-fab:hover, .info-fab:hover { transform:translateY(-1px); box-shadow:0 14px 30px rgba(0,0,0,.28); }
+    .filter-fab:hover, .mindmap-fab:hover, .add-fab:hover, .print-fab:hover, .save-fab:hover, .settings-fab:hover, .info-fab:hover { transform:translateY(-1px); box-shadow:0 14px 30px rgba(0,0,0,.28); }
     .filter-fab.active { background:#1f4c6b; }
     .filter-fab svg { width:26px; height:26px; display:block; }
     .filter-count { position:absolute; top:-3px; right:-3px; min-width:20px; height:20px; padding:0 5px; border-radius:999px; background:#f7d046; color:#111; font-size:11px; font-weight:700; line-height:20px; text-align:center; box-shadow:0 4px 10px rgba(0,0,0,.18); }
     .add-fab { right:18px; top:calc(50vh - 85px); font-size:36px; }
-    .print-fab { right:18px; top:calc(50vh + 35px); display:flex; align-items:center; justify-content:center; }
+    .mindmap-fab { right:18px; top:calc(50vh + 35px); display:flex; align-items:center; justify-content:center; transition:transform .18s ease, box-shadow .18s ease, background .18s ease; }
+    .mindmap-fab svg { width:27px; height:27px; display:block; }
+    .print-fab { right:18px; top:calc(50vh + 95px); display:flex; align-items:center; justify-content:center; }
     .print-fab svg { width:28px; height:28px; display:block; }
-    .print-options { position:fixed; right:78px; top:calc(50vh + 35px); display:flex; flex-direction:column; gap:8px; opacity:0; pointer-events:none; transform:translateX(8px); transition:transform .18s ease, opacity .18s ease; z-index:21; }
+    .print-options { position:fixed; right:78px; top:calc(50vh + 95px); display:flex; flex-direction:column; gap:8px; opacity:0; pointer-events:none; transform:translateX(8px); transition:transform .18s ease, opacity .18s ease; z-index:21; }
     .print-options.open { opacity:1; pointer-events:auto; transform:translateX(0); }
     .print-option-btn { min-width:128px; min-height:42px; border:1px solid #d7dee5; background:#fff; color:#17374a; box-shadow:0 10px 24px rgba(0,0,0,.14); padding:0 14px; font:700 12px/1 Arial, Helvetica, sans-serif; text-align:left; cursor:pointer; }
     .print-option-btn:hover { background:#f6f7f8; }
@@ -551,7 +553,7 @@
     @media print {
       @page { size:A5 landscape; margin:0; }
       html, body { width:var(--page-w); height:var(--page-h); background:#fff; }
-      .error, .search-shell, .print-fab, .add-fab, .load-fab, .filter-fab, .save-fab, .settings-fab, .info-fab, .print-options, .load-options, .filter-strip, .modal-backdrop, .loading-overlay, .task-expand, .sup-clear, .row-lock { display:none !important; }
+      .error, .search-shell, .print-fab, .add-fab, .load-fab, .filter-fab, .mindmap-fab, .save-fab, .settings-fab, .info-fab, .print-options, .load-options, .filter-strip, .modal-backdrop, .loading-overlay, .task-expand, .sup-clear, .row-lock { display:none !important; }
       body.print-current .page.print-exclude,
       body.print-current-overlay .page.print-exclude,
       body.print-current-other-layout .page.print-exclude { display:none !important; }

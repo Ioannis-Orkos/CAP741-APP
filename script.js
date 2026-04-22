@@ -77,6 +77,7 @@
       var loadGoogleSheetBtn = document.getElementById('loadGoogleSheetBtn');
       var createGoogleSheetBtn = document.getElementById('createGoogleSheetBtn');
       var filterBtn = document.getElementById('filterBtn');
+      var mindMapBtn = document.getElementById('mindMapBtn');
       var filterCountEl = document.getElementById('filterCount');
       var filterStripEl = document.getElementById('filterStrip');
       var addBtn = document.getElementById('addBlankPage');
@@ -241,6 +242,7 @@
       function resetDraftFilters(){ draftFilters=emptyFilterState(); for(var i=0;i<FILTER_KEYS.length;i++){ var input=filterInputForKey(FILTER_KEYS[i]); if(input) input.value=''; } renderDraftFilters(); }
       function openFilterPanel(){ if(!filterModal) return; draftFilters=cloneFilterState(activeFilters); for(var i=0;i<FILTER_KEYS.length;i++){ var input=filterInputForKey(FILTER_KEYS[i]); if(input) input.value=''; } renderDraftFilters(); filterModal.className='modal-backdrop filter-backdrop open'; setTimeout(function(){ if(filterAircraftTypeInput) filterAircraftTypeInput.focus(); },0); }
       function closeFilterPanel(){ if(filterModal) filterModal.className='modal-backdrop filter-backdrop'; }
+      function openMindMapFeature(){ showTopMessage('Mind map feature is ready for the next step. This button is now in place and waiting for the full view.','info'); }
       function readFilterForm(){ commitPendingDraftInputs(); return cloneFilterState(draftFilters); }
       function clearFilters(){ activeFilters=emptyFilterState(); draftFilters=emptyFilterState(); resetDraftFilters(); renderAll(); }
       function applySearchQuery(value){
@@ -2201,6 +2203,7 @@
 
       // ---- Event handlers ----
       filterBtn.onclick=function(){ openFilterPanel(); };
+      if(mindMapBtn) mindMapBtn.onclick=function(ev){ if(ev) ev.stopPropagation(); setLoadOptionsOpen(false); setPrintOptionsOpen(false); openMindMapFeature(); };
       closeFilterPanelBtn.onclick=function(){ closeFilterPanel(); };
       clearFiltersBtn.onclick=function(){ resetDraftFilters(); };
       filterForm.onsubmit=function(ev){ ev.preventDefault(); activeFilters=readFilterForm(); closeFilterPanel(); renderAll(); };
