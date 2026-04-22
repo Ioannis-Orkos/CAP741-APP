@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CAP 741 Section 3.1</title>
-  <link rel="stylesheet" href="style.css?v=20260422w" />
+  <link rel="stylesheet" href="style.css?v=20260422ze" />
 </head>
 <body>
   <div class="error" id="errorBox" role="status" aria-live="polite">
@@ -224,9 +224,10 @@
           <label for="filterAircraftType">Aircraft Type</label>
           <div class="multi-filter" data-filter-box="aircraftType">
             <div class="multi-filter-chips" id="filterAircraftTypeChips"></div>
-            <input class="multi-filter-input" id="filterAircraftType" type="text" list="aircraft-type-list" autocomplete="off" placeholder="Add aircraft type" data-filter-key="aircraftType">
+            <input class="multi-filter-input" id="filterAircraftType" type="text" list="filter-aircraft-mode-list" autocomplete="off" placeholder="Add aircraft type" data-filter-key="aircraftType">
           </div>
           <div class="filter-hint">Press `Enter` or comma to add more than one.</div>
+          <datalist id="filter-aircraft-mode-list"></datalist>
         </div>
         <div class="filter-field">
           <label for="filterAircraftReg">A/C Reg</label>
@@ -265,6 +266,6 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
   <script src="data.js?v=20260419c"></script>
   <script src="data-chapter.js?v=20260419a"></script>
-  <script src="script.js?v=20260422u"></script>
+  <script src="script.js?v=20260422ze"></script>
 </body>
 </html>
