@@ -2025,12 +2025,26 @@
         return classes.join(' ');
       }
       function dotsInputSize(value){ return Math.max(8,Math.min(56,s(value).length+1)); }
-      function renderDotsInput(value, extraAttrs){ return '<span class="dots-value"><input class="field-input dots-input" type="text" size="'+dotsInputSize(value)+'" value="'+esc(value||'')+'"'+(extraAttrs||'')+'></span>'; }
+      function dotsInputFontSize(value){
+        var length=s(value).length;
+        if(length<=16) return 11;
+        if(length>=40) return 9;
+        return Math.round((11-((length-16)*(2/24)))*100)/100;
+      }
+      function renderDotsInput(value, extraAttrs){
+        var text=s(value),size=dotsInputSize(text),fontSize=dotsInputFontSize(text);
+        return '<span class="dots-value"><input class="field-input dots-input" type="text" size="'+size+'" value="'+esc(text||'')+'" style="--dots-input-font-size:'+fontSize+'px;"'+(extraAttrs||'')+'></span>';
+      }
       function renderDotsStatic(value){ return '<span>'+(esc(value)||'&nbsp;')+'</span>'; }
       function renderPageHeaderDots(value, field, listId, editable){
         return '<span class="dots-line'+(editable?' editable-dots-line':'')+'">'+(editable?renderDotsInput(value,' data-group-field="'+field+'"'+(listId?' list="'+listId+'"':'')):renderDotsStatic(value))+'</span>';
       }
-      function syncDotsInputSize(input){ if(!input||!input.classList||!input.classList.contains('dots-input')) return; input.size=dotsInputSize(valueOf(input)); }
+      function syncDotsInputSize(input){
+        if(!input||!input.classList||!input.classList.contains('dots-input')) return;
+        var value=valueOf(input),fontSize=dotsInputFontSize(value);
+        input.size=dotsInputSize(value);
+        input.style.setProperty('--dots-input-font-size',fontSize+'px');
+      }
       function editableTextInput(field, rowId, value, placeholder, extraClass, listId){ return '<input class="field-input '+(extraClass||'')+'" type="text"'+(listId?' list="'+listId+'"':'')+' data-row-id="'+rowId+'" data-edit-field="'+field+'" value="'+esc(value||'')+'"'+(placeholder?' placeholder="'+esc(placeholder)+'"':'')+'>';}
       function editableCell(field, rowId, value, cls){ return '<div class="editable-cell '+(cls||'')+'" contenteditable="true" data-row-id="'+rowId+'" data-edit-field="'+field+'">'+(esc(value)||'&nbsp;')+'</div>'; }
       function staticTextCell(value, cls){ return '<div class="locked-cell'+(cls?' '+cls:'')+'">'+(esc(value)||'&nbsp;')+'</div>'; }
@@ -2081,12 +2095,12 @@
         if(airframes.length===1) return airframes[0];
         for(i=0;i<airframes.length;i++){
           splitAt=airframes[i].lastIndexOf(' ');
-          if(splitAt<=0) return airframes.join(' / ');
+          if(splitAt<=0) return airframes.join(', ');
           parts.push({ lead:s(airframes[i].slice(0,splitAt)), tail:s(airframes[i].slice(splitAt+1)) });
         }
         sharedLead=parts[0].lead;
-        for(i=0;i<parts.length;i++) if(parts[i].lead!==sharedLead||!parts[i].tail) return airframes.join(' / ');
-        return sharedLead+' '+parts.map(function(item){ return item.tail; }).join(' / ');
+        for(i=0;i<parts.length;i++) if(parts[i].lead!==sharedLead||!parts[i].tail) return airframes.join(', ');
+        return sharedLead+' '+parts.map(function(item){ return item.tail; }).join(', ');
       }
       function combinedAircraftTypeHeader(list, fallback){
         var types=uniqueTextList(list),parsed=[],engines=[],i,airframeText='',engineText='';
@@ -2095,8 +2109,8 @@
         for(i=0;i<types.length;i++) parsed.push(splitAircraftTypeParts(types[i]));
         for(i=0;i<parsed.length;i++) if(parsed[i].engine) engines.push(parsed[i].engine);
         airframeText=combinedAircraftAirframeLabel(parsed.map(function(item){ return item.airframe; }));
-        engineText=uniqueTextList(engines).join(' / ');
-        return airframeText+(engineText?' '+engineText:'');
+        engineText=uniqueTextList(engines).join(', ');
+        return airframeText+(engineText?', '+engineText:'');
       }
       function rowPageGroupingLabel(row, mode){
         mode=mode||currentPageGrouping();

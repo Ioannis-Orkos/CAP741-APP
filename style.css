@@ -75,7 +75,7 @@
     .dots-label { flex:0 0 auto; }
     .dots-line { flex:1 1 auto; border-bottom:1px dotted #222; height:1.15em; min-width:30px; position:relative; overflow:visible; }
     .dots-line span,
-    .dots-line .dots-value { position:absolute; left:50%; bottom:1px; transform:translateX(-50%); display:block; max-width:100%; background:rgba(255,255,255,.7); padding:0 .45ch; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:center; font-size:9.5px; line-height:1; }
+    .dots-line .dots-value { position:absolute; left:50%; bottom:1px; transform:translateX(-50%); display:block; max-width:100%; background:rgba(255,255,255,.7); padding:0 .45ch; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:center; font-size:11px; line-height:1; }
     .editable-dots-line { cursor:text; }
     .editable-dots-line .dots-value { left:50%; right:auto; bottom:0; transform:translateX(-50%); max-width:100%; padding:0 .45ch; }
     .editable-dots-line .dots-input { position:relative; top:1px; width:auto; min-width:8ch; max-width:100%; text-align:center; cursor:text; }
@@ -151,7 +151,7 @@
     .field-input, .field-select { width:100%; border:0; background:transparent; font:inherit; color:inherit; padding:0; margin:0; outline:none; text-align:center; }
     .field-select { appearance:none; }
     .field-input::placeholder { color:#666; opacity:1; }
-    .dots-line .dots-input { position:relative; top:1px; width:auto; min-width:8ch; max-width:100%; background:transparent; padding:0; margin:0; font:inherit; font-size:9.5px; line-height:1; text-align:center; }
+    .dots-line .dots-input { position:relative; top:1px; width:auto; min-width:8ch; max-width:100%; background:transparent; padding:0; margin:0; font:inherit; font-size:var(--dots-input-font-size, 11px); line-height:1; text-align:center; }
     .modal-preview .dots-line { cursor:text; }
     .modal-preview .dots-line .dots-value { left:0; right:0; transform:none; max-width:none; padding:0 .2ch; }
     .modal-preview .dots-line .dots-input { width:100%; min-width:0; max-width:none; text-align:center; cursor:text; }
