@@ -640,6 +640,81 @@
         var rect=viewport.getBoundingClientRect();
         zoomMindMapAt(factor,rect.left+(rect.width/2),rect.top+(rect.height/2));
       }
+      function mindMapTouchPointers(){
+        if(!mindMapState.touchPointers) mindMapState.touchPointers=Object.create(null);
+        return mindMapState.touchPointers;
+      }
+      function setMindMapTouchPointer(pointerId, clientX, clientY){
+        mindMapTouchPointers()[String(pointerId)]={ id:pointerId, x:Number(clientX)||0, y:Number(clientY)||0 };
+      }
+      function clearMindMapTouchPointer(pointerId){
+        var pointers=mindMapTouchPointers();
+        delete pointers[String(pointerId)];
+      }
+      function clearMindMapTouchPointers(){ mindMapState.touchPointers=Object.create(null); }
+      function mindMapTouchPointList(pointerIds){
+        var pointers=mindMapTouchPointers(),list=[],i,key;
+        if(pointerIds&&pointerIds.length){
+          for(i=0;i<pointerIds.length;i++){
+            key=String(pointerIds[i]);
+            if(pointers[key]) list.push(pointers[key]);
+          }
+          return list;
+        }
+        for(key in pointers) list.push(pointers[key]);
+        return list;
+      }
+      function mindMapPinchMetrics(points){
+        if(!points||points.length<2) return null;
+        var left=points[0],right=points[1],dx=(right.x-left.x),dy=(right.y-left.y);
+        return { centerX:(left.x+right.x)/2, centerY:(left.y+right.y)/2, distance:Math.sqrt((dx*dx)+(dy*dy)) };
+      }
+      function beginMindMapPinch(){
+        var viewport=currentMindMapViewport(),view=mindMapViewState(),points=mindMapTouchPointList(),metrics=mindMapPinchMetrics(points),rect,i,worldX,worldY;
+        if(!viewport||!metrics||points.length<2||metrics.distance<12) return false;
+        if(mindMapState.nodeDrag) endMindMapNodeDrag(mindMapState.nodeDrag.pointerId,{skipRender:true});
+        if(view.dragging) endMindMapDrag(view.pointerId);
+        rect=viewport.getBoundingClientRect();
+        worldX=((metrics.centerX-rect.left)-view.x)/Math.max(view.scale,0.0001);
+        worldY=((metrics.centerY-rect.top)-view.y)/Math.max(view.scale,0.0001);
+        mindMapState.pinch={ pointerIds:[points[0].id,points[1].id], startDistance:metrics.distance, startScale:view.scale, worldX:worldX, worldY:worldY };
+        view.needsCenter=false;
+        if(viewport.setPointerCapture){
+          for(i=0;i<mindMapState.pinch.pointerIds.length;i++){
+            try { viewport.setPointerCapture(mindMapState.pinch.pointerIds[i]); } catch(err){}
+          }
+        }
+        return true;
+      }
+      function updateMindMapPinch(){
+        var viewport=currentMindMapViewport(),view=mindMapViewState(),pinch=mindMapState.pinch,points=mindMapTouchPointList(pinch&&pinch.pointerIds),metrics=mindMapPinchMetrics(points),rect,localX,localY,newScale;
+        if(!viewport||!pinch||!metrics||points.length<2||metrics.distance<12) return false;
+        rect=viewport.getBoundingClientRect();
+        localX=metrics.centerX-rect.left;
+        localY=metrics.centerY-rect.top;
+        newScale=clampMindMapScale(pinch.startScale*(metrics.distance/Math.max(pinch.startDistance,1)));
+        view.scale=newScale;
+        view.x=localX-(pinch.worldX*newScale);
+        view.y=localY-(pinch.worldY*newScale);
+        view.needsCenter=false;
+        syncMindMapView();
+        return true;
+      }
+      function endMindMapPinch(pointerId){
+        var viewport=currentMindMapViewport(),pinch=mindMapState.pinch,ids,i;
+        if(!pinch) return false;
+        ids=pinch.pointerIds||[];
+        if(pointerId!=null&&ids.length&&ids.indexOf(pointerId)===-1&&mindMapTouchPointList(ids).length>=2) return false;
+        if(viewport&&viewport.releasePointerCapture){
+          for(i=0;i<ids.length;i++){
+            try {
+              if(!viewport.hasPointerCapture||viewport.hasPointerCapture(ids[i])) viewport.releasePointerCapture(ids[i]);
+            } catch(err){}
+          }
+        }
+        mindMapState.pinch=null;
+        return true;
+      }
       function syncMindMapDraggedNode(domKey){
         var node=currentMindMapLayoutNode(domKey),offset,nodeEl,linkEl;
         if(!node) return;
@@ -670,8 +745,9 @@
         offset.y=drag.startY+deltaY;
         syncMindMapDraggedNode(drag.domKey);
       }
-      function endMindMapNodeDrag(pointerId){
+      function endMindMapNodeDrag(pointerId, options){
         var drag=mindMapState.nodeDrag,nodeEl;
+        options=options||{};
         if(!drag||pointerId!=null&&drag.pointerId!==pointerId) return false;
         nodeEl=currentMindMapNodeEl(drag.domKey);
         if(nodeEl&&nodeEl.releasePointerCapture){
@@ -681,7 +757,7 @@
         }
         mindMapState.nodeDrag=null;
         if(drag.moved) mindMapState.suppressClickUntil=Date.now()+220;
-        if(drag.moved) renderMindMapModal();
+        if(drag.moved&&!options.skipRender) renderMindMapModal();
         return !!drag.moved;
       }
       function canStartMindMapDrag(target){
@@ -927,6 +1003,8 @@
         mindMapState.expandedGroups=Object.create(null);
         mindMapState.nodeOffsets=Object.create(null);
         mindMapState.nodeDrag=null;
+        mindMapState.pinch=null;
+        clearMindMapTouchPointers();
         mindMapState.detailClosed=false;
         mindMapState.suppressClickUntil=0;
         mindMapState.focusGroupId='';
@@ -945,7 +1023,7 @@
           if(firstNode&&typeof firstNode.focus==='function') firstNode.focus();
         },0);
       }
-      function closeMindMapModal(){ var view=mindMapViewState(); view.dragging=false; view.pointerId=null; mindMapState.nodeDrag=null; if(mindMapModal) mindMapModal.className='modal-backdrop'; syncMindMapView(); }
+      function closeMindMapModal(){ var view=mindMapViewState(); endMindMapPinch(); view.dragging=false; view.pointerId=null; mindMapState.nodeDrag=null; mindMapState.pinch=null; clearMindMapTouchPointers(); if(mindMapModal) mindMapModal.className='modal-backdrop'; syncMindMapView(); }
       function selectMindMapNode(kind, id, groupId, typeId, regId){
         var nextKind=s(kind)||'root',nextId=s(id)||'overview',nextGroup=s(groupId),sameGroup,nextType,nextReg,sameType,sameReg,sameChapter,expandedGroups=mindMapExpandedGroups();
         if(nextKind==='group'){
@@ -3038,6 +3116,14 @@
       if(mindMapCanvasEl) mindMapCanvasEl.addEventListener('pointerdown',function(ev){
         var viewport=currentMindMapViewport(),draggableNode=ev.target&&ev.target.closest&&ev.target.closest('[data-mindmap-draggable="1"]');
         if(!viewport||!viewport.contains(ev.target)) return;
+        if(ev.pointerType==='touch'){
+          setMindMapTouchPointer(ev.pointerId,ev.clientX,ev.clientY);
+          if(mindMapTouchPointList().length>=2){
+            ev.preventDefault();
+            beginMindMapPinch();
+            return;
+          }
+        }
         if(typeof ev.button==='number'&&ev.button!==0&&ev.pointerType!=='touch') return;
         if(draggableNode&&!(ev.target&&ev.target.closest&&ev.target.closest('[data-mindmap-inline-action="1"]'))){
           ev.preventDefault();
@@ -3050,6 +3136,12 @@
       });
       if(mindMapCanvasEl) mindMapCanvasEl.addEventListener('pointermove',function(ev){
         var view=mindMapViewState(),nodeDrag=mindMapState.nodeDrag;
+        if(ev.pointerType==='touch') setMindMapTouchPointer(ev.pointerId,ev.clientX,ev.clientY);
+        if(mindMapState.pinch){
+          ev.preventDefault();
+          updateMindMapPinch();
+          return;
+        }
         if(nodeDrag&&nodeDrag.pointerId===ev.pointerId){
           ev.preventDefault();
           updateMindMapNodeDrag(ev.clientX,ev.clientY);
@@ -3062,6 +3154,11 @@
       if(mindMapCanvasEl) ['pointerup','pointercancel','lostpointercapture'].forEach(function(eventName){
         mindMapCanvasEl.addEventListener(eventName,function(ev){
           var view=mindMapViewState(),nodeDrag=mindMapState.nodeDrag;
+          if(ev.pointerType==='touch') clearMindMapTouchPointer(ev.pointerId);
+          if(mindMapState.pinch){
+            endMindMapPinch(ev.pointerId);
+            return;
+          }
           if(nodeDrag&&nodeDrag.pointerId===ev.pointerId){
             endMindMapNodeDrag(ev.pointerId);
             return;
