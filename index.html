@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CAP 741 Section 3.1</title>
-  <link rel="stylesheet" href="style.css?v=20260422zi" />
+  <link rel="stylesheet" href="style.css?v=20260422zj" />
 </head>
 <body>
   <div class="error" id="errorBox" role="status" aria-live="polite">
@@ -35,7 +35,10 @@
   </div>
   <button class="load-fab" id="loadBtn" aria-label="Load logbook">Load</button>
   <div class="load-options" id="loadOptions" aria-hidden="true">
-    <button class="load-option-btn" id="loadExistingBtn" type="button">Load Existing File</button>
+    <label class="load-option-btn load-option-file" id="loadExistingBtn">
+      <span>Load Existing File</span>
+      <input id="workbookOpenInput" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" autocomplete="off">
+    </label>
     <button class="load-option-btn" id="createNewWorkbookBtn" type="button">New CAP741 File</button>
     <button class="load-option-btn" id="loadGoogleSheetBtn" type="button">Load Google Sheet</button>
     <button class="load-option-btn" id="createGoogleSheetBtn" type="button">New Google Sheet</button>
@@ -200,7 +203,7 @@
       <button class="mindmap-close" id="closeMindMapModal" type="button" aria-label="Close mind map">X</button>
       <div class="mindmap-head">
         <h2 class="mindmap-title">Mind Map</h2>
-        <p class="mindmap-copy">Start from the A/C groups arranged around the center, including Ungrouped and No A/C Reg. You can leave multiple group branches open, then click an A/C type to load its chapters and jobs in the side notes panel.</p>
+        <p class="mindmap-copy">Start from the A/C groups arranged around the center, including Ungrouped. You can leave multiple group branches open, then click an A/C type to load its chapters and jobs in the side notes panel.</p>
       </div>
       <div class="mindmap-shell">
         <div class="mindmap-canvas" id="mindMapCanvas"></div>
@@ -266,6 +269,6 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
   <script src="data.js?v=20260419c"></script>
   <script src="data-chapter.js?v=20260419a"></script>
-  <script src="script.js?v=20260422zg"></script>
+  <script src="script.js?v=20260422zq"></script>
 </body>
 </html>
