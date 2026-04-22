@@ -310,6 +310,11 @@
         for(i=0;i<regs.length;i++) html+='<option value="'+esc(regs[i])+'"></option>';
         return html;
       }
+      function aircraftOptionsHtmlForGroupLabel(groupLabel){
+        groupLabel=normalizeMindMapGroupLabel(groupLabel);
+        if(!groupLabel) return aircraftOptionsHtml();
+        return aircraftOptionsHtmlForGroups([groupLabel]);
+      }
       function syncFilterRegList(){ if(!filterAircraftRegListEl) return; filterAircraftRegListEl.innerHTML=currentPageGrouping()===PAGE_GROUPING_GROUP?aircraftOptionsHtmlForGroups(draftFilters.aircraftType):aircraftOptionsHtmlForTypes(draftFilters.aircraftType); }
       function syncFilterChapterList(){ if(!filterChapterListEl) return; filterChapterListEl.innerHTML='<option value="'+esc(BLANK_CHAPTER_FILTER)+'"></option>'+chapterOptionsHtml(); }
       function renderDraftFilterField(key){ var host=filterChipHostForKey(key),input=filterInputForKey(key); if(!host||!input) return; var values=filterValues(draftFilters,key),html=''; for(var i=0;i<values.length;i++) html+='<span class="multi-filter-chip"><span>'+esc(values[i])+'</span><button type="button" data-remove-filter-key="'+key+'" data-remove-filter-index="'+i+'" aria-label="Remove '+esc(values[i])+'">x</button></span>'; host.innerHTML=html; }
@@ -1984,7 +1989,12 @@
       function supervisorOptionsHtml(){ var html=''; for(var i=0;i<SUPERVISOR_OPTIONS.length;i++) html+='<option value="'+esc(SUPERVISOR_OPTIONS[i])+'"></option>'; return html; }
       function sharedDatalistsHtml(){ if(!sharedDatalistsCache) sharedDatalistsCache='<datalist id="aircraft-reg-list">'+aircraftOptionsHtml()+'</datalist><datalist id="aircraft-type-list">'+aircraftTypeOptionsHtml()+'</datalist><datalist id="chapter-list">'+chapterOptionsHtml()+'</datalist><datalist id="supervisor-list">'+supervisorOptionsHtml()+'</datalist>'; return sharedDatalistsCache; }
       function aircraftRegListIdForGroup(group){ return 'aircraft-reg-list-'+safeIdPart(s(group&&group.key)||((s(group&&group.type)+'-'+s(group&&group.chapter))||'group')); }
-      function groupAircraftRegDatalistHtml(group){ var types=((group&&group.typeList)||[]).filter(Boolean); return '<datalist id="'+aircraftRegListIdForGroup(group)+'">'+aircraftOptionsHtmlForTypes(types)+'</datalist>'; }
+      function groupAircraftRegDatalistHtml(group){
+        var options='';
+        if(group&&group.mode===PAGE_GROUPING_GROUP) options=aircraftOptionsHtmlForGroupLabel(group.groupLabel);
+        else options=aircraftOptionsHtmlForTypes(((group&&group.typeList)||[]).filter(Boolean));
+        return '<datalist id="'+aircraftRegListIdForGroup(group)+'">'+options+'</datalist>';
+      }
       function renderedGroupDatalistsHtml(renderedGroups){ var html=[],seen=Object.create(null); for(var i=0;i<(renderedGroups||[]).length;i++){ var group=renderedGroups[i]&&renderedGroups[i].group,key=s(group&&group.key); if(!key||seen[key]) continue; seen[key]=true; html.push(groupAircraftRegDatalistHtml(group)); } return html.join(''); }
       function usedAircraftTypes(){ var seen={},vals=[]; for(var i=0;i<rows.length;i++){ var type=aircraftLabel(rows[i]); if(type&&!seen[type]){ seen[type]=true; vals.push(type); } } vals.sort(); return vals; }
       function usedAircraftTypeOptionsHtml(){ var vals=usedAircraftTypes(); if(!vals.length) return aircraftTypeOptionsHtml(); var html=''; for(var i=0;i<vals.length;i++) html+='<option value="'+esc(vals[i])+'"></option>'; return html; }
