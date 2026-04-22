@@ -105,9 +105,9 @@
     .task-wrap .task > .locked-cell { display:block; width:100%; max-height:100%; overflow:hidden; box-sizing:border-box; }
     .task-wrap.task-wrap-four-lines { align-items:center; }
     .task-wrap.task-wrap-four-lines .task { align-items:center; }
-    .slot.merged-slot td.c-task { vertical-align:top; }
-    .slot.merged-slot .task-wrap { display:flex; align-items:flex-start; height:100%; overflow:hidden; }
-    .slot.merged-slot .task-wrap .task { flex:1 1 auto; min-width:0; height:100%; }
+    .slot.merged-slot td.c-task { vertical-align:middle; }
+    .slot.merged-slot .task-wrap { display:flex; align-items:center; height:100%; overflow:hidden; }
+    .slot.merged-slot .task-wrap .task { flex:1 1 auto; min-width:0; height:100%; align-items:center; }
     .task-expand { position:absolute; top:0; right:0; z-index:2; width:16px; height:16px; padding:0; border:1px solid rgba(102,102,102,.65); background:rgba(255,255,255,.62); color:#111; cursor:pointer; font:11px/14px Arial, Helvetica, sans-serif; text-align:center; }
     .task-expand:hover { background:rgba(255,255,255,.85); }
     .sheet td.c-date { position:relative; overflow:visible; }
