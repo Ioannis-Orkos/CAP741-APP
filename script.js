@@ -24,9 +24,12 @@
       var rows = [];
       var AIRCRAFT_MAP = Object.create(null);
       var CHAPTER_OPTIONS = [];
+      var FLAG_RECORDS = [];
       var LOG_OWNER_INFO = { name: '', signature: '', stamp: '' };
       var PAGE_GROUPING_TYPE = 'type';
       var PAGE_GROUPING_GROUP = 'group';
+      var FLAG_SECTION_PRIMARY = 'Primary';
+      var FLAG_SECTION_MORE = 'More';
       var DEFAULT_APP_VIEW_SETTINGS = { showMindMap: true, pageGrouping: PAGE_GROUPING_TYPE };
       var APP_VIEW_SETTINGS = { showMindMap: DEFAULT_APP_VIEW_SETTINGS.showMindMap, pageGrouping: DEFAULT_APP_VIEW_SETTINGS.pageGrouping };
       var SUPERVISOR_OPTIONS = [];
@@ -48,7 +51,7 @@
       var GOOGLE_CLIENT_ID = '647645362385-rj453g1g2g79hh9vorp1guvp7e9c8b9b.apps.googleusercontent.com';
       var DEFAULT_WORKBOOK_PATH = './cap741-data.xlsx';
       var BLANK_CHAPTER_FILTER = 'No Chapter';
-      var LOG_HEADERS = ['Aircraft Type','A/C Reg','Chapter','Chapter Description','Date','Job No','FAULT','Task Detail','Rewriten for cap741','Approval Name','Approval stamp','Aprroval Licence No.','Signed'];
+      var LOG_HEADERS = ['Aircraft Type','A/C Reg','Chapter','Chapter Description','Date','Job No','FAULT','Task Detail','Rewriten for cap741','Flags','Approval Name','Approval stamp','Aprroval Licence No.','Signed'];
       var DATE_PLACEHOLDER = 'dd/MMM/yyyy';
       var FILTER_KEYS = ['aircraftType','aircraftReg','supervisor','chapter'];
       var STORAGE_SOURCE_NONE = 'none';
@@ -56,11 +59,26 @@
       var STORAGE_SOURCE_EXCEL = 'excel';
       var STORAGE_SOURCE_GOOGLE = 'google-sheet';
       var GOOGLE_SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
-      var GOOGLE_SHEET_TITLES = ['Logbook','Aircraft','Chapters','Supervisors','Info'];
+      var GOOGLE_SHEET_TITLES = ['Logbook','Aircraft','Chapters','Supervisors','Flags','Info'];
       var NEW_WORKBOOK_SUPERVISOR_NAME = 'Ioannis Orkos';
       var NEW_WORKBOOK_SUPERVISOR_LICENCE = 'UK.XX.XXXXXXX';
       var NEW_WORKBOOK_TASK_TEXT = 'Dummy data test one';
       var NEW_WORKBOOK_OWNER_NAME = 'User User';
+      var DEFAULT_FLAG_RECORDS = [
+        { section:FLAG_SECTION_PRIMARY, flag:'INSP - Inspections (Surveillance, Detailed & General Visual)', color:'Gold' },
+        { section:FLAG_SECTION_PRIMARY, flag:'T/S - Troubleshooting', color:'Purple' },
+        { section:FLAG_SECTION_PRIMARY, flag:'F & O - Functional & Operational Check', color:'Green' },
+        { section:FLAG_SECTION_PRIMARY, flag:'SRM - Structural Repair Manual', color:'Blue' },
+        { section:FLAG_SECTION_PRIMARY, flag:'R & I - Removal & Installation', color:'Maroon' },
+        { section:FLAG_SECTION_MORE, flag:'Metal Damage Assessment*', color:'Black' },
+        { section:FLAG_SECTION_MORE, flag:'CDCCL Tasks*', color:'Gray' },
+        { section:FLAG_SECTION_MORE, flag:'Metal Repair*', color:'MistyRose' },
+        { section:FLAG_SECTION_MORE, flag:'Elect Wiring, Looming, Crimping, Soldering etc.*', color:'SkyBlue' },
+        { section:FLAG_SECTION_MORE, flag:'Composite Damage Assessment*', color:'Teal' },
+        { section:FLAG_SECTION_MORE, flag:'ESDS Procedures*', color:'Pink' },
+        { section:FLAG_SECTION_MORE, flag:'Composite Repair*', color:'DarkRed' },
+        { section:FLAG_SECTION_MORE, flag:'Avionic LRU Replacement*', color:'Aqua' }
+      ];
       var OTHER_LAYOUT_DEFAULTS = { top: 36, headerHeight: 11, left: 14.5, dateStart: 14.5, regStart: 31.5, jobStart: 53.5, taskStart: 69, superStart: 142, end: 193, rowHeight: 13, textTop: 3, textLeft: 1 };
       var SUPERVISOR_LIST_ROWS_PER_PAGE = 10;
 
@@ -177,6 +195,10 @@
       var detailTaskEl = document.getElementById('detailTask');
       var detailRewriteEl = document.getElementById('detailRewrite');
       var sharedListsEl = document.getElementById('sharedLists');
+      var detailFlagsPrimaryEl = document.getElementById('detailFlagsPrimary');
+      var detailFlagsMoreWrapEl = document.getElementById('detailFlagsMoreWrap');
+      var detailFlagsMoreEl = document.getElementById('detailFlagsMore');
+      var detailFlagsEmptyEl = document.getElementById('detailFlagsEmpty');
       var saveBtn = document.getElementById('saveBlankPage');
       var cancelBtn = document.getElementById('cancelBlankPage');
       var modalShell = modal.querySelector('.modal-shell');
@@ -1456,10 +1478,10 @@
       function normalizeSearchText(value){ return String(value==null?'':value).toLowerCase().replace(/\s+/g,' ').trim(); }
       function rowSearchHaystack(row){
         row=row||{};
-        var key=[row['Job No']||'',row['Task Detail']||'',row['Rewriten for cap741']||''].join('\u0001');
+        var key=[row['Job No']||'',row['Task Detail']||'',row['Rewriten for cap741']||'',row['Flags']||''].join('\u0001');
         if(row.__searchCacheKey!==key){
           row.__searchCacheKey=key;
-          row.__searchCacheValue=normalizeSearchText((row['Job No']||'')+' '+(row['Task Detail']||'')+' '+(row['Rewriten for cap741']||''));
+          row.__searchCacheValue=normalizeSearchText((row['Job No']||'')+' '+(row['Task Detail']||'')+' '+(row['Rewriten for cap741']||'')+' '+(row['Flags']||''));
         }
         return row.__searchCacheValue||'';
       }
@@ -1809,6 +1831,161 @@
           {Key:'Page Grouping',Value:currentPageGrouping()}
         ];
       }
+      function cloneFlagRecords(records){
+        return (records||[]).map(function(record){
+          return { section:normalizeFlagSection(record&&record.section), flag:s(record&&record.flag), color:s(record&&record.color) };
+        }).filter(function(record){ return !!record.flag; });
+      }
+      function defaultFlagRecords(){ return cloneFlagRecords(DEFAULT_FLAG_RECORDS); }
+      function normalizeFlagToken(value){
+        return normalizedText(s(value).replace(/[–—]/g,'-').replace(/\s+/g,' '));
+      }
+      function normalizeFlagSection(value){
+        var token=normalizeFlagToken(value);
+        if(token==='more'||token==='expanded'||token==='secondary'||token==='default'||token==='options') return FLAG_SECTION_MORE;
+        return FLAG_SECTION_PRIMARY;
+      }
+      function flagShortLabel(value){
+        var label=s(value),match=label.match(/^(.+?)\s+[–-]\s+/);
+        if(match&&match[1]) return s(match[1]);
+        if(label.length<=18) return label;
+        return label.slice(0,15).replace(/\s+$/,'')+'...';
+      }
+      function flagBadgeLetter(value){
+        var label=flagShortLabel(value)||s(value),match=label.match(/[A-Za-z0-9]/);
+        if(match&&match[0]) return match[0].toUpperCase();
+        return label?label.charAt(0).toUpperCase():'';
+      }
+      function flagSortIndex(label){
+        var token=normalizeFlagToken(label);
+        for(var i=0;i<DEFAULT_FLAG_RECORDS.length;i++) if(normalizeFlagToken(DEFAULT_FLAG_RECORDS[i].flag)===token) return i;
+        return DEFAULT_FLAG_RECORDS.length+1000;
+      }
+      function flagColorForLabel(label){
+        var token=normalizeFlagToken(label),i;
+        for(i=0;i<FLAG_RECORDS.length;i++) if(normalizeFlagToken(FLAG_RECORDS[i].flag)===token) return s(FLAG_RECORDS[i].color);
+        for(i=0;i<DEFAULT_FLAG_RECORDS.length;i++) if(normalizeFlagToken(DEFAULT_FLAG_RECORDS[i].flag)===token) return s(DEFAULT_FLAG_RECORDS[i].color);
+        return '';
+      }
+      function flagSectionForLabel(label){
+        var token=normalizeFlagToken(label),i;
+        for(i=0;i<FLAG_RECORDS.length;i++) if(normalizeFlagToken(FLAG_RECORDS[i].flag)===token) return normalizeFlagSection(FLAG_RECORDS[i].section);
+        for(i=0;i<DEFAULT_FLAG_RECORDS.length;i++) if(normalizeFlagToken(DEFAULT_FLAG_RECORDS[i].flag)===token) return normalizeFlagSection(DEFAULT_FLAG_RECORDS[i].section);
+        return FLAG_SECTION_PRIMARY;
+      }
+      function flagRecordForToken(value){
+        var token=normalizeFlagToken(value),i,record;
+        if(!token) return null;
+        for(i=0;i<FLAG_RECORDS.length;i++){
+          record=FLAG_RECORDS[i];
+          if(normalizeFlagToken(record.flag)===token||normalizeFlagToken(flagShortLabel(record.flag))===token) return record;
+        }
+        for(i=0;i<DEFAULT_FLAG_RECORDS.length;i++){
+          record=DEFAULT_FLAG_RECORDS[i];
+          if(normalizeFlagToken(record.flag)===token||normalizeFlagToken(flagShortLabel(record.flag))===token) return record;
+        }
+        return null;
+      }
+      function normalizeFlagSelection(values){
+        var parts=Array.isArray(values)?values.slice():String(values==null?'':values).split(/\s*(?:;|\r?\n|\|)\s*/),seen=Object.create(null),matched=[],extra=[],i,raw,record,label,token;
+        for(i=0;i<parts.length;i++){
+          raw=s(parts[i]);
+          if(!raw) continue;
+          record=flagRecordForToken(raw);
+          label=s(record&&record.flag)||raw;
+          token=normalizeFlagToken(label);
+          if(!token||seen[token]) continue;
+          seen[token]=true;
+          if(record) matched.push(label);
+          else extra.push(label);
+        }
+        matched.sort(function(a,b){
+          var left=flagSortIndex(a),right=flagSortIndex(b);
+          if(left!==right) return left-right;
+          return s(a).localeCompare(s(b),undefined,{numeric:true});
+        });
+        extra.sort(function(a,b){ return s(a).localeCompare(s(b),undefined,{numeric:true}); });
+        return matched.concat(extra);
+      }
+      function serializeFlagSelection(values){ return normalizeFlagSelection(values).join('; '); }
+      function rowFlagLabels(row){ return normalizeFlagSelection(row&&row['Flags']); }
+      function setRowFlags(row, values){ if(row) row['Flags']=serializeFlagSelection(values); }
+      function flagSummaryRecords(row){
+        return rowFlagLabels(row).map(function(label){
+          var record=flagRecordForToken(label);
+          return { flag:s(record&&record.flag)||label, color:s(record&&record.color)||flagColorForLabel(label) };
+        });
+      }
+      function flagSectionSelectHtml(value){
+        value=normalizeFlagSection(value);
+        return '<select data-col="Section"><option value="'+FLAG_SECTION_PRIMARY+'"'+(value===FLAG_SECTION_PRIMARY?' selected':'')+'>'+FLAG_SECTION_PRIMARY+'</option><option value="'+FLAG_SECTION_MORE+'"'+(value===FLAG_SECTION_MORE?' selected':'')+'>'+FLAG_SECTION_MORE+'</option></select>';
+      }
+      function renderDetailFlagOption(record, selectedTokens){
+        var label=s(record&&record.flag),checked=!!selectedTokens[normalizeFlagToken(label)],color=s(record&&record.color)||'#8091a0';
+        return '<label class="detail-flag-option"><input class="detail-flag-check" type="checkbox" data-flag-option="1" value="'+esc(label)+'"'+(checked?' checked':'')+'><span class="detail-flag-chip"><span class="detail-flag-dot" style="background-color:'+esc(color)+'"></span><span class="detail-flag-chip-text">'+esc(label)+'</span></span></label>';
+      }
+      function renderTaskDetailFlagOptions(selectedValues){
+        var selectedTokens=Object.create(null),i,record,primaryHtml=[],moreHtml=[],section;
+        for(i=0;i<(selectedValues||[]).length;i++) selectedTokens[normalizeFlagToken(selectedValues[i])]=true;
+        for(i=0;i<FLAG_RECORDS.length;i++){
+          record=FLAG_RECORDS[i];
+          section=normalizeFlagSection(record.section);
+          if(section===FLAG_SECTION_MORE) moreHtml.push(renderDetailFlagOption(record,selectedTokens));
+          else primaryHtml.push(renderDetailFlagOption(record,selectedTokens));
+        }
+        if(detailFlagsPrimaryEl) detailFlagsPrimaryEl.innerHTML=primaryHtml.join('');
+        if(detailFlagsMoreEl) detailFlagsMoreEl.innerHTML=moreHtml.join('');
+        if(detailFlagsMoreWrapEl){
+          detailFlagsMoreWrapEl.hidden=!moreHtml.length;
+          detailFlagsMoreWrapEl.open=false;
+        }
+        if(detailFlagsEmptyEl) detailFlagsEmptyEl.hidden=!!(primaryHtml.length||moreHtml.length);
+      }
+      function readTaskDetailSelectedFlags(){
+        var checks=taskDetailModal?taskDetailModal.querySelectorAll('[data-flag-option]:checked'):[],values=[];
+        for(var i=0;i<checks.length;i++) values.push(s(checks[i].value));
+        return normalizeFlagSelection(values);
+      }
+      function flagWorkbookRows(){
+        return FLAG_RECORDS.map(function(record){
+          return { Section:normalizeFlagSection(record.section), Flag:s(record.flag), Color:s(record.color) };
+        });
+      }
+      function applyFlagRows(records){
+        records=records||[];
+        var parsed=[],seen=Object.create(null),legacy=false,i,record,label,color,section,token;
+        for(i=0;i<records.length;i++){
+          record=records[i]||{};
+          if(Object.prototype.hasOwnProperty.call(record,'Flags')||Object.prototype.hasOwnProperty.call(record,'More')||Object.prototype.hasOwnProperty.call(record,'Gold')) legacy=true;
+          label=s(record.flag||record.Flag||record.label||record.Label||record.name||record.Name||record.More);
+          color=s(record.color||record.Color||record.colour||record.Colour||record.Gold);
+          section=normalizeFlagSection(record.section||record.Section||record.group||record.Group||record.Flags);
+          if(normalizeFlagToken(label)==='options') continue;
+          if(!label) continue;
+          token=normalizeFlagToken(label);
+          if(seen[token]) continue;
+          seen[token]=true;
+          parsed.push({ section:section, flag:label, color:color||flagColorForLabel(label) });
+        }
+        if(legacy){
+          for(i=0;i<DEFAULT_FLAG_RECORDS.length;i++){
+            label=DEFAULT_FLAG_RECORDS[i].flag;
+            token=normalizeFlagToken(label);
+            if(seen[token]) continue;
+            seen[token]=true;
+            parsed.push({ section:normalizeFlagSection(DEFAULT_FLAG_RECORDS[i].section), flag:label, color:s(DEFAULT_FLAG_RECORDS[i].color) });
+          }
+        }
+        parsed=cloneFlagRecords(parsed);
+        parsed.sort(function(a,b){
+          var sectionDiff=(normalizeFlagSection(a.section)===FLAG_SECTION_MORE?1:0)-(normalizeFlagSection(b.section)===FLAG_SECTION_MORE?1:0);
+          if(sectionDiff) return sectionDiff;
+          var left=flagSortIndex(a.flag),right=flagSortIndex(b.flag);
+          if(left!==right) return left-right;
+          return s(a.flag).localeCompare(s(b.flag),undefined,{numeric:true});
+        });
+        FLAG_RECORDS=parsed.length?parsed:defaultFlagRecords();
+      }
 
       // ---- Date ----
       function padDatePart(value){ return String(value).padStart(2,'0'); }
@@ -1824,12 +2001,12 @@
       function formatDateDisplay(v){ var iso=toIsoInputDate(v); return iso?toDisplayDate(iso):s(v); }
       function parseChapterValue(raw){ var value=s(raw),parts=value.split(' - '); return {chapter:s(parts.shift()),chapterDesc:s(parts.join(' - '))}; }
       function workbookDateValue(row){ return row&&row.__dateDirty?row['Date']:(s(row&&row.__rawDate)||s(row&&row['Date'])); }
-      function normalizeLoadedRow(row){ var rawDate=s(row&&row['Date']); row['Date']=formatDateDisplay(rawDate); row.__rawDate=rawDate; row.__dateDirty=false; return row; }
-      function clearWorkbookState(){ rows=normalizeRows([]); AIRCRAFT_GROUP_ROWS=[]; AIRCRAFT_MAP=Object.create(null); CHAPTER_OPTIONS=[]; LOG_OWNER_INFO={ name:'', signature:'', stamp:'' }; APP_VIEW_SETTINGS=cloneAppViewSettings(DEFAULT_APP_VIEW_SETTINGS); rebuildSupervisorState([]); activeFilters=emptyFilterState(); draftFilters=emptyFilterState(); applySearchQuery(''); markSharedDatalistsDirty(); settingsDirty=false; resetSavedLogbookState(); syncMindMapButtonVisibility(); }
+      function normalizeLoadedRow(row){ var rawDate=s(row&&row['Date']); row['Date']=formatDateDisplay(rawDate); row['Flags']=serializeFlagSelection(row&&row['Flags']); row.__rawDate=rawDate; row.__dateDirty=false; return row; }
+      function clearWorkbookState(){ rows=normalizeRows([]); AIRCRAFT_GROUP_ROWS=[]; AIRCRAFT_MAP=Object.create(null); CHAPTER_OPTIONS=[]; FLAG_RECORDS=defaultFlagRecords(); LOG_OWNER_INFO={ name:'', signature:'', stamp:'' }; APP_VIEW_SETTINGS=cloneAppViewSettings(DEFAULT_APP_VIEW_SETTINGS); rebuildSupervisorState([]); activeFilters=emptyFilterState(); draftFilters=emptyFilterState(); applySearchQuery(''); markSharedDatalistsDirty(); settingsDirty=false; resetSavedLogbookState(); syncMindMapButtonVisibility(); }
 
       // ---- Row model ----
-      function emptyLogRow(type, chapter, chapterDesc){ return {__rowId:nextRowId(),'Aircraft Type':s(type),'A/C Reg':'','Chapter':s(chapter),'Chapter Description':s(chapterDesc),'Date':'','Job No':'','FAULT':'','Task Detail':'','Rewriten for cap741':'','Approval Name':'','Approval stamp':'','Aprroval Licence No.':'','Signed':'',__trackedComparablePresent:false}; }
-      function rowHasEntryContent(row){ return !!(s(row['Date'])||s(row['A/C Reg'])||s(row['Job No'])||s(row['FAULT'])||s(row['Task Detail'])||s(row['Rewriten for cap741'])||s(row['Approval Name'])||s(row['Approval stamp'])||s(row['Aprroval Licence No.'])); }
+      function emptyLogRow(type, chapter, chapterDesc){ return {__rowId:nextRowId(),'Aircraft Type':s(type),'A/C Reg':'','Chapter':s(chapter),'Chapter Description':s(chapterDesc),'Date':'','Job No':'','FAULT':'','Task Detail':'','Rewriten for cap741':'','Flags':'','Approval Name':'','Approval stamp':'','Aprroval Licence No.':'','Signed':'',__trackedComparablePresent:false}; }
+      function rowHasEntryContent(row){ return !!(s(row['Date'])||s(row['A/C Reg'])||s(row['Job No'])||s(row['FAULT'])||s(row['Task Detail'])||s(row['Rewriten for cap741'])||s(row['Flags'])||s(row['Approval Name'])||s(row['Approval stamp'])||s(row['Aprroval Licence No.'])); }
       function rowHasWorkbookContent(row){ return !!(rowHasEntryContent(row)||s(row['Aircraft Type'])||s(row['Chapter'])||s(row['Chapter Description'])); }
       function nonEmptyRows(list){ var out=[]; for(var i=0;i<(list||[]).length;i++){ if(rowHasEntryContent(list[i]||{})) out.push(list[i]); } return out; }
       function workbookContentRows(list){ var out=[]; for(var i=0;i<(list||[]).length;i++){ if(rowHasWorkbookContent(list[i]||{})) out.push(list[i]); } return out; }
@@ -2134,10 +2311,20 @@
       function clearRowButtonHtml(row){
         return '<button class="sup-clear" type="button" data-clear-supervisor="1" data-row-id="'+row.__rowId+'" aria-label="Clear row" title="Clear row">Clear</button>';
       }
+      function renderRowFlagsSummary(row){
+        var flags=flagSummaryRecords(row),html=[],visibleCount=Math.min(flags.length,3),extraCount=flags.length-visibleCount,i,item;
+        if(!flags.length) return '';
+        for(i=0;i<visibleCount;i++){
+          item=flags[i]||{};
+          html.push('<span class="sup-flag-pill" title="'+esc(item.flag)+'"><span class="sup-flag-dot" style="background-color:'+esc(s(item.color)||'#7f93a1')+'"></span><span class="sup-flag-pill-text">'+esc(flagBadgeLetter(item.flag))+'</span></span>');
+        }
+        if(extraCount>0) html.push('<span class="sup-flag-pill sup-flag-pill-more" title="'+esc(flags.slice(visibleCount).map(function(flag){ return flag.flag; }).join(', '))+'">+'+extraCount+'</span>');
+        return '<div class="sup-flags" title="'+esc(flags.map(function(flag){ return flag.flag; }).join(', '))+'">'+html.join('')+'</div>';
+      }
       function editableSupervisorCell(row){
-        var clearAction=clearRowButtonHtml(row);
-        if(isRowSigned(row)) return '<div class="sup sup-locked"><span class="star">*</span>'+staticTextCell(row['Approval Name'],'name locked-text')+staticTextCell(row['Aprroval Licence No.'],'licence locked-text')+clearAction+'</div>';
-        return '<div class="sup"><span class="star">*</span>'+editableTextInput('Approval Name',row.__rowId,row['Approval Name'],'Supervisor','name','supervisor-list')+editableTextInput('Aprroval Licence No.',row.__rowId,row['Aprroval Licence No.'],'Licence number','licence')+clearAction+'</div>';
+        var clearAction=clearRowButtonHtml(row),flagsHtml=renderRowFlagsSummary(row),classes='sup'+(flagsHtml?' has-flags':'');
+        if(isRowSigned(row)) return '<div class="'+classes+' sup-locked"><span class="star">*</span>'+staticTextCell(row['Approval Name'],'name locked-text')+staticTextCell(row['Aprroval Licence No.'],'licence locked-text')+flagsHtml+clearAction+'</div>';
+        return '<div class="'+classes+'"><span class="star">*</span>'+editableTextInput('Approval Name',row.__rowId,row['Approval Name'],'Supervisor','name','supervisor-list')+editableTextInput('Aprroval Licence No.',row.__rowId,row['Aprroval Licence No.'],'Licence number','licence')+flagsHtml+clearAction+'</div>';
       }
       function dateCellHtml(row){
         var dateContent=isRowSigned(row)
@@ -2411,7 +2598,7 @@
         for(var n=0;n<supFields.length;n++){ supFields[n].closest('td').addEventListener('click',function(){ var input=this.querySelector('[data-field="sup_name"]'); if(!input) return; input.focus(); }); supFields[n].addEventListener('change',function(){ var licenceInput=this.closest('td').querySelector('[data-field="sup_licence"]'); applySupervisorSuggestion(this,licenceInput); }); }
       }
       function collectModalPage(){ var heads={},headNodes=modalBody.querySelectorAll('[data-head]'); for(var i=0;i<headNodes.length;i++) heads[headNodes[i].getAttribute('data-head')]=valueOf(headNodes[i]); var resultRows=[],trs=modalBody.querySelectorAll('tbody tr'); for(var j=0;j<trs.length;j++){ var tr=trs[j],rawSupName=valueOf(tr.querySelector('[data-field="sup_name"]')),parsedSup=extractSupervisorParts(rawSupName); var item={date:formatDateDisplay(valueOf(tr.querySelector('[data-field="date"]'))),reg:s(valueOf(tr.querySelector('[data-field="reg"]'))).toUpperCase(),job:textOf(tr.querySelector('[data-field="job"]')),task:textOf(tr.querySelector('[data-field="task"]')),supName:parsedSup.name||rawSupName,supLicence:valueOf(tr.querySelector('[data-field="sup_licence"]'))||parsedSup.licence,supStamp:parsedSup.stamp||''}; if(item.date||item.reg||item.job||item.task||item.supName||item.supLicence) resultRows.push(item); } return {heads:heads,rows:resultRows}; }
-      function manualPageToLogRows(page){ var heads=page.heads||{},chapterInfo=parseChapterValue(heads.chapter),out=[]; for(var i=0;i<(page.rows||[]).length;i++){ var item=page.rows[i]; out.push({'Aircraft Type':s(heads.type)||AIRCRAFT_MAP[s(item.reg).toUpperCase()]||'','A/C Reg':s(item.reg).toUpperCase(),'Chapter':chapterInfo.chapter,'Chapter Description':chapterInfo.chapterDesc,'Date':formatDateDisplay(item.date),'Job No':s(item.job),'FAULT':'','Task Detail':s(item.task),'Rewriten for cap741':s(item.task),'Approval Name':s(item.supName),'Approval stamp':s(item.supStamp)||(supervisorRecordFor(item.supName)||{}).stamp||'','Aprroval Licence No.':s(item.supLicence)||(supervisorRecordFor(item.supName)||{}).licence||''}); } return out; }
+      function manualPageToLogRows(page){ var heads=page.heads||{},chapterInfo=parseChapterValue(heads.chapter),out=[]; for(var i=0;i<(page.rows||[]).length;i++){ var item=page.rows[i]; out.push({'Aircraft Type':s(heads.type)||AIRCRAFT_MAP[s(item.reg).toUpperCase()]||'','A/C Reg':s(item.reg).toUpperCase(),'Chapter':chapterInfo.chapter,'Chapter Description':chapterInfo.chapterDesc,'Date':formatDateDisplay(item.date),'Job No':s(item.job),'FAULT':'','Task Detail':s(item.task),'Rewriten for cap741':s(item.task),'Flags':'','Approval Name':s(item.supName),'Approval stamp':s(item.supStamp)||(supervisorRecordFor(item.supName)||{}).stamp||'','Aprroval Licence No.':s(item.supLicence)||(supervisorRecordFor(item.supName)||{}).licence||''}); } return out; }
 
       // ---- Print ----
       function pageElements(){ return Array.prototype.slice.call(pagesEl.querySelectorAll('.page')); }
@@ -2487,10 +2674,10 @@
       // ---- Task detail modal ----
       function openInfoModal(){ if(infoModal) infoModal.className='modal-backdrop open'; }
       function closeInfoModal(){ if(infoModal) infoModal.className='modal-backdrop'; }
-      function taskDetailStateFromRow(row){ return { chapter:s(row['Chapter']), chapterDesc:s(row['Chapter Description']), fault:s(row['FAULT']), task:s(row['Task Detail']), rewrite:s(row['Rewriten for cap741']) }; }
-      function restoreTaskDetailState(row, state){ if(!row||!state) return; row['Chapter']=state.chapter; row['Chapter Description']=state.chapterDesc; row['FAULT']=state.fault; row['Task Detail']=state.task; row['Rewriten for cap741']=state.rewrite; }
+      function taskDetailStateFromRow(row){ return { chapter:s(row['Chapter']), chapterDesc:s(row['Chapter Description']), fault:s(row['FAULT']), task:s(row['Task Detail']), rewrite:s(row['Rewriten for cap741']), flags:s(row['Flags']) }; }
+      function restoreTaskDetailState(row, state){ if(!row||!state) return; row['Chapter']=state.chapter; row['Chapter Description']=state.chapterDesc; row['FAULT']=state.fault; row['Task Detail']=state.task; row['Rewriten for cap741']=state.rewrite; row['Flags']=serializeFlagSelection(state.flags); }
       function previewTaskDetailForm(){ var row=rowById(lastTaskDetailRowId); if(!row) return; applyTaskDetailForm(row,readTaskDetailForm()); updateRowDirtyState(row); refreshUnsavedChangesState(); }
-      function openTaskDetail(rowId){ lastTaskDetailFocus=document.activeElement&&pagesEl.contains(document.activeElement)?document.activeElement:null; captureActiveEditorState(); var row=rowById(rowId); if(!row) return; lastTaskDetailRowId=rowId; taskDetailOriginalState=taskDetailStateFromRow(row); taskDetailRewriteDirty=false; detailChapterEl.value=chapterLabelText(row); detailFaultEl.value=s(row['FAULT']); detailTaskEl.value=s(row['Task Detail']); detailRewriteEl.value=s(row['Rewriten for cap741']||row['Task Detail']); taskDetailModal.className='modal-backdrop open'; if(typeof requestAnimationFrame==='function') requestAnimationFrame(autoSizeDetailTextareas); else autoSizeDetailTextareas(); }
+      function openTaskDetail(rowId){ lastTaskDetailFocus=document.activeElement&&pagesEl.contains(document.activeElement)?document.activeElement:null; captureActiveEditorState(); var row=rowById(rowId); if(!row) return; lastTaskDetailRowId=rowId; taskDetailOriginalState=taskDetailStateFromRow(row); taskDetailRewriteDirty=false; detailChapterEl.value=chapterLabelText(row); detailFaultEl.value=s(row['FAULT']); detailTaskEl.value=s(row['Task Detail']); detailRewriteEl.value=s(row['Rewriten for cap741']||row['Task Detail']); renderTaskDetailFlagOptions(rowFlagLabels(row)); taskDetailModal.className='modal-backdrop open'; if(typeof requestAnimationFrame==='function') requestAnimationFrame(autoSizeDetailTextareas); else autoSizeDetailTextareas(); }
       function showConfirmDialog(title, text, okLabel){ return new Promise(function(resolve){ confirmResolver=resolve; if(confirmTitleEl) confirmTitleEl.textContent=title||'Confirm'; if(confirmTextEl) confirmTextEl.textContent=text||'Are you sure?'; if(confirmOkBtn) confirmOkBtn.textContent=okLabel||'Confirm'; if(confirmModal) confirmModal.className='modal-backdrop open'; }); }
       function closeConfirmDialog(result){ if(confirmModal) confirmModal.className='modal-backdrop'; if(confirmResolver){ var resolve=confirmResolver; confirmResolver=null; resolve(!!result); } }
       function readTaskDetailForm(){
@@ -2498,7 +2685,8 @@
           chapter:s(detailChapterEl.value),
           fault:s(detailFaultEl.value),
           task:s(detailTaskEl.value),
-          rewrite:s(detailRewriteEl.value)
+          rewrite:s(detailRewriteEl.value),
+          flags:readTaskDetailSelectedFlags()
         };
       }
       function applyTaskDetailForm(row, form){
@@ -2506,6 +2694,7 @@
         row['FAULT']=form.fault;
         row['Task Detail']=form.task;
         row['Rewriten for cap741']=form.rewrite||form.task;
+        setRowFlags(row,form.flags);
         if(parsedChapter.chapter){
           row['Chapter']=parsedChapter.chapter;
           row['Chapter Description']=parsedChapter.chapterDesc;
@@ -2517,6 +2706,9 @@
         applyTaskDetailForm(row,readTaskDetailForm());
         updateRowDirtyState(row);
         refreshUnsavedChangesState();
+        if(!rowHasEntryContent(row)&&comparableRowSignature(row)!==(savedComparableRowSignature(row)||'')){
+          removeRowById(row.__rowId);
+        }
         renderAll();
         closeTaskDetail(true);
         scheduleAutoSave();
@@ -3107,6 +3299,7 @@
           { title:'Aircraft', headers:['Group','A/C Reg','Aircraft Type'], rows:aircraftWorkbookRows() },
           { title:'Chapters', headers:['Chapter','Description'], rows:chapterWorkbookRows() },
           { title:'Supervisors', headers:['ID','Signatory Name','Stamp','License Number','Scope / Limitations','Date'], rows:supervisorWorkbookRows() },
+          { title:'Flags', headers:['Section','Flag','Color'], rows:flagWorkbookRows() },
           { title:'Info', headers:['Key','Value'], rows:infoWorkbookRows() }
         ];
       }
@@ -3130,6 +3323,7 @@
         initializeSignedSlots(rows);
         applyChapterRows((sheetObjects.Chapters||[]).map(function(r){ return {chapter:r.Chapter,description:r.Description}; }));
         rebuildSupervisorState((sheetObjects.Supervisors||[]).map(function(r){ return {id:r.ID,name:r['Signatory Name'],stamp:r.Stamp,licence:r['License Number'],scope:r['Scope / Limitations'],date:r.Date}; }));
+        applyFlagRows(sheetObjects.Flags||[]);
         LOG_OWNER_INFO={ name:'', signature:'', stamp:'' };
         APP_VIEW_SETTINGS=cloneAppViewSettings(DEFAULT_APP_VIEW_SETTINGS);
         var infoRows=sheetObjects.Info||[];
@@ -3173,7 +3367,7 @@
       function workbookSheetObjects(workbook, sheetName){ var sheet=workbook&&workbook.Sheets?workbook.Sheets[sheetName]:null; if(!sheet||!window.XLSX) return []; return XLSX.utils.sheet_to_json(sheet,{defval:'',raw:false}); }
       // Workbook sheets are the source of truth on disk; this function translates them
       // into the smaller in-memory structures the UI works with.
-      function loadWorkbookFromArrayBuffer(buffer){ var workbook=XLSX.read(buffer,{type:'array'}); applySheetObjects({ Logbook:workbookSheetObjects(workbook,'Logbook'), Aircraft:workbookSheetObjects(workbook,'Aircraft'), Chapters:workbookSheetObjects(workbook,'Chapters'), Supervisors:workbookSheetObjects(workbook,'Supervisors'), Info:workbookSheetObjects(workbook,'Info') }); }
+      function loadWorkbookFromArrayBuffer(buffer){ var workbook=XLSX.read(buffer,{type:'array'}); applySheetObjects({ Logbook:workbookSheetObjects(workbook,'Logbook'), Aircraft:workbookSheetObjects(workbook,'Aircraft'), Chapters:workbookSheetObjects(workbook,'Chapters'), Supervisors:workbookSheetObjects(workbook,'Supervisors'), Flags:workbookSheetObjects(workbook,'Flags'), Info:workbookSheetObjects(workbook,'Info') }); }
       async function loadDefaultWorkbookData(){ var res=await fetch(DEFAULT_WORKBOOK_PATH,{cache:'no-store'}); if(!res.ok) throw new Error('Excel workbook returned '+res.status); loadWorkbookFromArrayBuffer(await res.arrayBuffer()); }
       function buildWorkbookFromState(){ syncAllRowAircraftTypes(); var wb=XLSX.utils.book_new(),defs=stateSheetDefinitions(); for(var i=0;i<defs.length;i++) XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(defs[i].rows,{header:defs[i].headers}),defs[i].title); return wb; }
       async function getXlsxHandle(){ try { var stored=await loadStoredHandle(LINKED_FILE_KEY); if(stored&&handleIsWorkbook(stored)){ setLinkedWorkbookName(stored); var perm=await stored.queryPermission({mode:'readwrite'}); if(perm==='granted') return stored; perm=await stored.requestPermission({mode:'readwrite'}); if(perm==='granted') return stored; } } catch(e){} return null; }
@@ -3228,6 +3422,7 @@
         AIRCRAFT_GROUP_ROWS=starterAircraft?[starterAircraft]:[];
         AIRCRAFT_MAP=starterAircraft?(function(){ var map=Object.create(null); map[starterAircraft.reg]=starterAircraft.type; return map; })():Object.create(null);
         CHAPTER_OPTIONS=[];
+        FLAG_RECORDS=defaultFlagRecords();
         LOG_OWNER_INFO={ name:NEW_WORKBOOK_OWNER_NAME, signature:'', stamp:NEW_WORKBOOK_OWNER_NAME };
         APP_VIEW_SETTINGS=cloneAppViewSettings(DEFAULT_APP_VIEW_SETTINGS);
         activeFilters=emptyFilterState();
@@ -3324,8 +3519,10 @@
       function nextSupervisorNumericId(records){ var max=0; for(var i=0;i<(records||[]).length;i++){ var id=parseInt(s(records[i]&&records[i].id),10); if(isFinite(id)&&id>max) max=id; } return max+1; }
       function todaySupervisorDate(){ var now=new Date(); var iso=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0'); return formatDateDisplay(iso); }
       function supervisorPrintCheckboxHtml(checked){ return '<label class="settings-print-check"><input type="checkbox" data-supervisor-print="1"'+(checked?' checked':'')+'><span>&#10003;</span></label>'; }
+      function settingsFlagColorCell(value){ return '<div class="settings-flag-color-cell"><span class="settings-flag-color-dot" style="background-color:'+esc(s(value)||'#7f93a1')+'"></span><input type="text" data-col="Color" value="'+esc(value)+'" placeholder="Gold"></div>'; }
       function renderSettingsRows(kind){ var html=''; if(kind==='aircraft'){ var list=aircraftWorkbookRows(); for(var i=0;i<list.length;i++) html+=settingsTableRow(['<input type="text" data-col="Group" value="'+esc(list[i].Group)+'">','<input type="text" data-col="A/C Reg" value="'+esc(list[i]['A/C Reg'])+'">','<input type="text" data-col="Aircraft Type" value="'+esc(list[i]['Aircraft Type'])+'">'],kind); }
       if(kind==='chapters'){ var ch=chapterWorkbookRows(); for(var j=0;j<ch.length;j++) html+=settingsTableRow(['<input type="text" data-col="Chapter" value="'+esc(ch[j].Chapter)+'">','<input type="text" data-col="Description" value="'+esc(ch[j].Description)+'">'],kind); }
+      if(kind==='flags'){ var fl=flagWorkbookRows(); for(var f=0;f<fl.length;f++) html+=settingsTableRow([flagSectionSelectHtml(fl[f].Section),'<input type="text" data-col="Flag" value="'+esc(fl[f].Flag)+'">',settingsFlagColorCell(fl[f].Color)],kind); }
       if(kind==='supervisors'){ var su=supervisorWorkbookRows(); for(var k=0;k<su.length;k++) html+=settingsTableRow([supervisorPrintCheckboxHtml(false),'<input type="text" data-col="Signatory Name" value="'+esc(su[k]['Signatory Name'])+'">','<input type="text" data-col="Stamp" value="'+esc(su[k].Stamp)+'">','<input type="text" data-col="License Number" value="'+esc(su[k]['License Number'])+'">','<input type="text" data-col="Scope / Limitations" value="'+esc(su[k]['Scope / Limitations'])+'">'],kind,'data-supervisor-id="'+esc(su[k].ID)+'" data-supervisor-date="'+esc(su[k].Date)+'"'); }
       return html; }
       function collectSettingsTable(kind){ var tbody=settingsBodyEl&&settingsBodyEl.querySelector('[data-settings-table="'+kind+'"] tbody'),out=[]; if(!tbody) return out; var trs=tbody.querySelectorAll('tr'); for(var i=0;i<trs.length;i++){ var obj={},hasValue=false,inputs=trs[i].querySelectorAll('[data-col]'); for(var j=0;j<inputs.length;j++){ var key=inputs[j].getAttribute('data-col'),value=s(inputs[j].value); if(value) hasValue=true; obj[key]=value; } if(hasValue) out.push(obj); } return out; }
@@ -3383,7 +3580,7 @@
       }
       function renderSettingsBody(tab){
         settingsActiveTab=tab||'owner';
-        var TABS=[{id:'owner',label:'Owner'},{id:'view',label:'View'},{id:'storage',label:'Storage'},{id:'aircraft',label:'Aircraft'},{id:'supervisors',label:'Supervisors'},{id:'chapters',label:'Chapters'}];
+        var TABS=[{id:'owner',label:'Owner'},{id:'view',label:'View'},{id:'storage',label:'Storage'},{id:'aircraft',label:'Aircraft'},{id:'supervisors',label:'Supervisors'},{id:'chapters',label:'Chapters'},{id:'flags',label:'Flags'}];
         var tabsHtml='<div class="settings-tabs-nav">';
         for(var t=0;t<TABS.length;t++) tabsHtml+='<button type="button" class="settings-tab-btn'+(TABS[t].id===settingsActiveTab?' active':'')+'" data-settings-tab="'+TABS[t].id+'">'+TABS[t].label+'</button>';
         tabsHtml+='</div>';
@@ -3400,6 +3597,8 @@
           panelHtml='<div class="settings-tab-panel"><p class="settings-panel-copy">Manage supervisor names, stamps, and licence numbers. Tick the rows you want to include in the printed supervisor list.</p><div class="settings-panel-toolbar"><button class="settings-add-row" type="button" data-settings-add="supervisors">+ Add supervisor</button></div><div class="settings-table-wrap"><table class="settings-table" data-settings-table="supervisors"><thead><tr><th class="settings-supervisor-print-col"></th><th>Name</th><th>Stamp</th><th>Licence</th><th>Scope</th><th></th></tr></thead><tbody>'+renderSettingsRows('supervisors')+'</tbody></table></div></div>';
         } else if(settingsActiveTab==='chapters'){
           panelHtml='<div class="settings-tab-panel"><p class="settings-panel-copy">Manage ATA chapter numbers and descriptions. These appear in the Chapter dropdown on pages and filters.</p><div class="settings-panel-toolbar"><button class="settings-add-row" type="button" data-settings-add="chapters">+ Add chapter</button></div><div class="settings-table-wrap"><table class="settings-table" data-settings-table="chapters"><thead><tr><th>Chapter</th><th>Description</th><th></th></tr></thead><tbody>'+renderSettingsRows('chapters')+'</tbody></table></div></div>';
+        } else if(settingsActiveTab==='flags'){
+          panelHtml='<div class="settings-tab-panel"><p class="settings-panel-copy">Manage the flag list, whether a flag appears in the main list or under More Flags, and the color used when it is shown on the page.</p><div class="settings-panel-toolbar"><button class="settings-add-row" type="button" data-settings-add="flags">+ Add flag</button></div><div class="settings-table-wrap"><table class="settings-table" data-settings-table="flags"><thead><tr><th>Section</th><th>Flag</th><th>Color</th><th></th></tr></thead><tbody>'+renderSettingsRows('flags')+'</tbody></table></div></div>';
         }
         settingsBodyEl.innerHTML=tabsHtml+panelHtml;
         if(printSupervisorsBtn) printSupervisorsBtn.hidden=settingsActiveTab!=='supervisors';
@@ -3497,7 +3696,7 @@
       }
       function openSettingsModal(){ if(!settingsModal||!settingsBodyEl) return; renderSettingsBody(settingsActiveTab); settingsModal.className='modal-backdrop open'; }
       function closeSettingsModal(){ if(settingsModal) settingsModal.className='modal-backdrop'; }
-      function addSettingsRow(kind){ var tbody=settingsBodyEl&&settingsBodyEl.querySelector('[data-settings-table="'+kind+'"] tbody'); if(!tbody) return; var rowHtml=kind==='aircraft'?settingsTableRow(['<input type="text" data-col="Group" placeholder="Group">','<input type="text" data-col="A/C Reg" placeholder="G-XXXX">','<input type="text" data-col="Aircraft Type" placeholder="Boeing 777-300ER - GE90">'],kind):(kind==='chapters'?settingsTableRow(['<input type="text" data-col="Chapter" placeholder="e.g. 71">','<input type="text" data-col="Description" placeholder="e.g. Power Plant">'],kind):settingsTableRow([supervisorPrintCheckboxHtml(false),'<input type="text" data-col="Signatory Name" placeholder="Name">','<input type="text" data-col="Stamp" placeholder="Stamp">','<input type="text" data-col="License Number" placeholder="Licence No.">','<input type="text" data-col="Scope / Limitations" placeholder="Scope">'],kind)); tbody.insertAdjacentHTML('beforeend',rowHtml); tbody.lastElementChild.querySelector('input[data-col]') && tbody.lastElementChild.querySelector('input[data-col]').focus(); }
+      function addSettingsRow(kind){ var tbody=settingsBodyEl&&settingsBodyEl.querySelector('[data-settings-table="'+kind+'"] tbody'); if(!tbody) return; var rowHtml=kind==='aircraft'?settingsTableRow(['<input type="text" data-col="Group" placeholder="Group">','<input type="text" data-col="A/C Reg" placeholder="G-XXXX">','<input type="text" data-col="Aircraft Type" placeholder="Boeing 777-300ER - GE90">'],kind):(kind==='chapters'?settingsTableRow(['<input type="text" data-col="Chapter" placeholder="e.g. 71">','<input type="text" data-col="Description" placeholder="e.g. Power Plant">'],kind):(kind==='flags'?settingsTableRow([flagSectionSelectHtml(FLAG_SECTION_PRIMARY),'<input type="text" data-col="Flag" placeholder="INSP - Inspections">',settingsFlagColorCell('Gold')],kind):settingsTableRow([supervisorPrintCheckboxHtml(false),'<input type="text" data-col="Signatory Name" placeholder="Name">','<input type="text" data-col="Stamp" placeholder="Stamp">','<input type="text" data-col="License Number" placeholder="Licence No.">','<input type="text" data-col="Scope / Limitations" placeholder="Scope">'],kind))); tbody.insertAdjacentHTML('beforeend',rowHtml); tbody.lastElementChild.querySelector('input[data-col], select[data-col]') && tbody.lastElementChild.querySelector('input[data-col], select[data-col]').focus(); }
       async function saveSettingsFromModal(){
         // Save owner info (only available on owner tab; store from DOM if on that tab, else use cached)
         var ownerNameEl=settingsBodyEl.querySelector('#settingsOwnerName');
@@ -3511,6 +3710,8 @@
           applyAircraftGroupRows(collectSettingsTable('aircraft').map(function(r){ return {group:r.Group,reg:r['A/C Reg'],type:r['Aircraft Type']}; }));
         } else if(settingsActiveTab==='chapters'){
           applyChapterRows(collectSettingsTable('chapters').map(function(r){ return {chapter:r.Chapter,description:r.Description}; }));
+        } else if(settingsActiveTab==='flags'){
+          applyFlagRows(collectSettingsTable('flags').map(function(r){ return {section:r.Section,flag:r.Flag,color:r.Color}; }));
         } else if(settingsActiveTab==='supervisors'){
           rebuildSupervisorState(collectSupervisorSettingsTable().map(function(r){ return {id:r.ID,name:r['Signatory Name'],stamp:r.Stamp,licence:r['License Number'],scope:r['Scope / Limitations'],date:r.Date}; }));
         }
@@ -3610,6 +3811,7 @@
       if(detailFaultEl) detailFaultEl.addEventListener('input',function(){ autoSizeDetailTextarea(detailFaultEl); previewTaskDetailForm(); });
       if(detailTaskEl) detailTaskEl.addEventListener('input',function(){ if(!taskDetailRewriteDirty) detailRewriteEl.value=detailTaskEl.value; autoSizeDetailTextarea(detailTaskEl); autoSizeDetailTextarea(detailRewriteEl); previewTaskDetailForm(); });
       if(detailRewriteEl) detailRewriteEl.addEventListener('input',function(){ taskDetailRewriteDirty=true; autoSizeDetailTextarea(detailRewriteEl); previewTaskDetailForm(); });
+      if(taskDetailModal) taskDetailModal.addEventListener('change',function(ev){ if(ev.target&&ev.target.matches&&ev.target.matches('[data-flag-option]')) previewTaskDetailForm(); });
       if(confirmCancelBtn) confirmCancelBtn.onclick=function(){ closeConfirmDialog(false); };
       if(confirmOkBtn) confirmOkBtn.onclick=function(){ closeConfirmDialog(true); };
       if(confirmModal) confirmModal.onclick=function(ev){ if(ev.target===confirmModal) closeConfirmDialog(false); };
@@ -3845,6 +4047,12 @@
           return;
         }
       });
+      if(settingsBodyEl) settingsBodyEl.addEventListener('input',function(ev){
+        var colorInput=ev.target&&ev.target.closest&&ev.target.closest('[data-col="Color"]');
+        if(!colorInput) return;
+        var dot=colorInput.parentElement&&colorInput.parentElement.querySelector('.settings-flag-color-dot');
+        if(dot) dot.style.backgroundColor=s(colorInput.value)||'#7f93a1';
+      });
       if(settingsBodyEl) settingsBodyEl.addEventListener('click',function(ev){
         var unlink=ev.target.closest&&ev.target.closest('[data-settings-unlink]');
         if(unlink){
@@ -4004,6 +4212,7 @@
 
       // ---- Startup ----
       rows=normalizeRows(rows);
+      FLAG_RECORDS=defaultFlagRecords();
 
       (async function cap741Startup(){
         setLoadingState(true,'Loading logbook','Reading cap741-data.xlsx...');
