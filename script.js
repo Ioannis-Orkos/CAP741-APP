@@ -1581,7 +1581,7 @@
         if(loadGoogleSheetBtn) loadGoogleSheetBtn.textContent=loadButtonMode==='link'?'Link Google Sheet':'Load Google Sheet';
       }
       function setLoadOptionsOpen(open){ if(!loadOptionsEl||!loadBtn) return; syncLoadOptionLabels(); loadOptionsEl.classList.toggle('open',!!open); loadOptionsEl.setAttribute('aria-hidden',open?'false':'true'); loadBtn.classList.toggle('active',!!open); }
-      function hasWorkbookDataLoaded(){ return !!(rows.length||AIRCRAFT_GROUP_ROWS.length||CHAPTER_OPTIONS.length||SUPERVISOR_RECORDS.length||s(LOG_OWNER_INFO.name)||s(LOG_OWNER_INFO.signature)||s(LOG_OWNER_INFO.stamp)); }
+      function hasWorkbookDataLoaded(){ return !!(sourceType(activeStorageSource)!==STORAGE_SOURCE_NONE||rows.length||AIRCRAFT_GROUP_ROWS.length||SUPERVISOR_RECORDS.length||s(LOG_OWNER_INFO.name)||s(LOG_OWNER_INFO.signature)||s(LOG_OWNER_INFO.stamp)||!chapterOptionsMatchDefaults()); }
       function setLinkedWorkbookName(handle){ linkedWorkbookName=handle&&handleIsWorkbook(handle)?s(handle.name):''; }
       function readStoredJson(key){ try { return window.localStorage ? JSON.parse(window.localStorage.getItem(key)||'null') : null; } catch(e){ return null; } }
       function writeStoredJson(key, value){ try { if(!window.localStorage) return; if(value==null) window.localStorage.removeItem(key); else window.localStorage.setItem(key,JSON.stringify(value)); } catch(e){} }
@@ -3244,6 +3244,14 @@
         return defaultChapterRows().map(function(record){
           return record.description ? (record.chapter+' - '+record.description) : record.chapter;
         });
+      }
+      function chapterOptionsMatchDefaults(){
+        var defaults=defaultChapterOptions();
+        if(CHAPTER_OPTIONS.length!==defaults.length) return false;
+        for(var i=0;i<defaults.length;i++){
+          if(s(CHAPTER_OPTIONS[i])!==s(defaults[i])) return false;
+        }
+        return true;
       }
       function applyChapterRows(records){
         var source=(records&&records.length)?records:defaultChapterRows();
