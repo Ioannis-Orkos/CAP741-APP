@@ -124,6 +124,11 @@
     .sup .star { font-weight:700; display:block; grid-column:1; grid-row:1; width:10px; margin:0; text-align:left; line-height:1.2; }
     .sup .name { display:block; grid-column:2; grid-row:1; width:100%; min-width:0; line-height:.95; }
     .sup .licence { display:block; grid-column:2; grid-row:2; width:100%; min-width:0; margin:-1px 0 0; line-height:.95; }
+    .sup .field-input-view-wrap { position:relative; display:block; width:100%; min-width:0; }
+    .sup .field-input-view { position:absolute; left:0; right:0; top:0; overflow:hidden; color:inherit; white-space:nowrap; text-overflow:ellipsis; pointer-events:none; line-height:1.2; }
+    .sup .ref-view-input:focus + .field-input-view,
+    .sup .field-input-view-wrap.has-input-value .field-input-view { display:none; }
+    .sup .field-input-view-wrap.has-view-value:not(.has-input-value) .ref-view-input::placeholder { color:transparent; opacity:0; }
     .sup .sup-clear { grid-column:3; grid-row:1 / span 2; align-self:center; justify-self:end; margin:0 -22px 0 6px; border:1px solid rgba(140,30,30,.28); background:rgba(255,255,255,.9); color:#8a0000; cursor:pointer; padding:5px 1px; min-width:16px; font:700 8px/1 Arial, Helvetica, sans-serif; writing-mode:vertical-rl; transform:rotate(180deg); text-align:center; letter-spacing:.04em; }
     .sup .sup-clear:hover { background:#fff5f5; border-color:rgba(140,30,30,.42); }
     .sup.sup-locked .name, .sup.sup-locked .licence { padding:1px 0; }
@@ -798,6 +803,10 @@ button.mindmap-node { cursor:pointer; }
         color:#111 !important;
         -webkit-text-fill-color:#111 !important;
         caret-color:transparent !important;
+      }
+      .field-input-view {
+        color:#111 !important;
+        -webkit-text-fill-color:#111 !important;
       }
       .field-input:not([value]),
       .field-input[value=""] {

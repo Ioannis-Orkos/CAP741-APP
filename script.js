@@ -2239,7 +2239,13 @@
         if(!nameInput) return null;
         var resolved=normalizeSupervisorValue(nameInput.value);
         if(resolved.name) nameInput.value=resolved.name;
-        if(licenceInput&&resolved.licence&&!referenceOnlySaveEnabled()) licenceInput.value=resolved.licence;
+        syncFieldInputViewState(nameInput);
+        if(licenceInput){
+          if(resolved.licence&&!referenceOnlySaveEnabled()) licenceInput.value=resolved.licence;
+          var licenceView=licenceInput.nextElementSibling&&licenceInput.nextElementSibling.classList&&licenceInput.nextElementSibling.classList.contains('field-input-view')?licenceInput.nextElementSibling:null;
+          if(licenceView) licenceView.textContent=resolved.licence||'';
+          syncFieldInputViewState(licenceInput);
+        }
         if(row){
           row[SUPERVISOR_ID_FIELD]=resolved.id||'';
           row['Approval Name']=resolved.name;
@@ -2419,7 +2425,19 @@
         input.size=dotsInputSize(value);
         input.style.setProperty('--dots-input-font-size',fontSize+'px');
       }
+      function syncFieldInputViewState(input){
+        var wrap=input&&input.parentElement;
+        if(!wrap||!wrap.classList||!wrap.classList.contains('field-input-view-wrap')) return;
+        wrap.classList.toggle('has-input-value',!!s(valueOf(input)));
+      }
       function editableTextInput(field, rowId, value, placeholder, extraClass, listId){ return '<input class="field-input '+(extraClass||'')+'" type="text"'+(listId?' list="'+listId+'"':'')+' data-row-id="'+rowId+'" data-edit-field="'+field+'" value="'+esc(value||'')+'"'+(placeholder?' placeholder="'+esc(placeholder)+'"':'')+'>';}
+      function editableTextInputWithView(field, rowId, value, placeholder, extraClass, listId, viewValue){
+        var text=s(value),viewText=s(viewValue),classes=['field-input-view-wrap'];
+        if(extraClass) classes.push(s(extraClass));
+        if(text) classes.push('has-input-value');
+        if(viewText) classes.push('has-view-value');
+        return '<span class="'+esc(classes.join(' '))+'"><input class="field-input ref-view-input" type="text"'+(listId?' list="'+listId+'"':'')+' data-row-id="'+rowId+'" data-edit-field="'+field+'" value="'+esc(text)+'"'+(placeholder?' placeholder="'+esc(placeholder)+'"':'')+'><span class="field-input-view" aria-hidden="true">'+esc(viewText||'')+'</span></span>';
+      }
       function editableCell(field, rowId, value, cls){ return '<div class="editable-cell '+(cls||'')+'" contenteditable="true" data-row-id="'+rowId+'" data-edit-field="'+field+'">'+(esc(value)||'&nbsp;')+'</div>'; }
       function staticTextCell(value, cls){ return '<div class="locked-cell'+(cls?' '+cls:'')+'">'+(esc(value)||'&nbsp;')+'</div>'; }
       function placeholderCellHtml(extraClass){ return '<div class="'+(extraClass||'placeholder-cell')+'">&nbsp;</div>'; }
@@ -2446,8 +2464,8 @@
       }
       function editableSupervisorCell(row){
         var clearAction=clearRowButtonHtml(row),flagsHtml=renderRowFlagsSummary(row),classes='sup'+(flagsHtml?' has-flags':'');
-        if(isRowSigned(row)) return '<div class="'+classes+' sup-locked"><span class="star">*</span>'+staticTextCell(row['Approval Name'],'name locked-text')+staticTextCell(row['Aprroval Licence No.'],'licence locked-text')+flagsHtml+clearAction+'</div>';
-        return '<div class="'+classes+'"><span class="star">*</span>'+editableTextInput('Approval Name',row.__rowId,row['Approval Name'],'Supervisor','name','supervisor-list')+editableTextInput('Aprroval Licence No.',row.__rowId,row['Aprroval Licence No.'],'Licence number','licence')+flagsHtml+clearAction+'</div>';
+        if(isRowSigned(row)) return '<div class="'+classes+' sup-locked"><span class="star">*</span>'+staticTextCell(supervisorNameView(row),'name locked-text')+staticTextCell(supervisorLicenceView(row),'licence locked-text')+flagsHtml+clearAction+'</div>';
+        return '<div class="'+classes+'"><span class="star">*</span>'+editableTextInputWithView('Approval Name',row.__rowId,row['Approval Name'],'Supervisor','name','supervisor-list',supervisorNameView(row))+editableTextInputWithView('Aprroval Licence No.',row.__rowId,row['Aprroval Licence No.'],'Licence number','licence','',supervisorLicenceView(row))+flagsHtml+clearAction+'</div>';
       }
       function dateCellHtml(row){
         var dateContent=isRowSigned(row)
@@ -4216,6 +4234,7 @@
       });
       pagesEl.addEventListener('input',function(ev){
         if(ev.target&&ev.target.classList&&ev.target.classList.contains('dots-input')) syncDotsInputSize(ev.target);
+        if(ev.target&&ev.target.classList&&ev.target.classList.contains('ref-view-input')) syncFieldInputViewState(ev.target);
         var cell=ev.target.closest&&(ev.target.closest('.editable-cell')||ev.target.closest('[data-row-id]')||ev.target.closest('[data-new-row]'));
         if(!cell) return;
         if(ev.target.matches&&ev.target.matches('[data-group-field]')) return;
