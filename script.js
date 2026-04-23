@@ -1962,9 +1962,32 @@
       function isoFromDateParts(year, month, day){ var y=normalizeDateYear(year),m=padDatePart(month),d=padDatePart(day); return isValidIsoDateParts(y,m,d)?(y+'-'+m+'-'+d):''; }
       function excelSerialToIso(value){ var serial=Number(value); if(!isFinite(serial)||serial<=0) return ''; var whole=Math.floor(serial); var utc=(whole-25569)*86400000; var date=new Date(utc); if(!isFinite(date.getTime())) return ''; return isoFromDateParts(date.getUTCFullYear(),date.getUTCMonth()+1,date.getUTCDate()); }
       function parseDate(v){ var iso=toIsoInputDate(v); return iso?new Date(iso+'T00:00:00').getTime():8640000000000000; }
+      function sortableRowDateValue(row){
+        var iso=toIsoInputDate(row&&row['Date']);
+        return iso ? new Date(iso+'T00:00:00').getTime() : -8640000000000000;
+      }
+      function compareRowsNewestFirst(a,b){
+        var leftIso=toIsoInputDate(a&&a['Date']),rightIso=toIsoInputDate(b&&b['Date']),da=leftIso?new Date(leftIso+'T00:00:00').getTime():null,db=rightIso?new Date(rightIso+'T00:00:00').getTime():null;
+        if(da==null&&db==null){
+          var leftEmpty=Number(a&&a.__rowId),rightEmpty=Number(b&&b.__rowId);
+          if(isFinite(leftEmpty)&&isFinite(rightEmpty)&&leftEmpty!==rightEmpty) return rightEmpty-leftEmpty;
+          return s(b&&b['Job No']).localeCompare(s(a&&a['Job No']),undefined,{numeric:true});
+        }
+        if(da==null) return -1;
+        if(db==null) return 1;
+        if(da!==db) return db-da;
+        var left=Number(a&&a.__rowId),right=Number(b&&b.__rowId);
+        if(isFinite(left)&&isFinite(right)&&left!==right) return right-left;
+        return s(b&&b['Job No']).localeCompare(s(a&&a['Job No']),undefined,{numeric:true});
+      }
+      function compareRowsOldestFirst(a,b){
+        var da=parseDate(a&&a['Date']),db=parseDate(b&&b['Date']);
+        if(da!==db) return da-db;
+        return (Number(a&&a.__rowId)||0)-(Number(b&&b.__rowId)||0);
+      }
       function todayIsoDate(){ var now=new Date(); return now.getFullYear()+'-'+padDatePart(now.getMonth()+1)+'-'+padDatePart(now.getDate()); }
       function toDisplayDate(v){ var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(s(v)); if(!m) return s(v); var months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return m[3]+'/'+months[(+m[2])-1]+'/'+m[1]; }
-      function toIsoInputDate(v){ var src=s(v),m,iso=''; if(!src) return ''; if(/^(\d{4})-(\d{2})-(\d{2})$/.test(src)) return src; if(/^\d+(?:\.\d+)?$/.test(src)){ iso=excelSerialToIso(src); if(iso) return iso; } m=/^(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})$/.exec(src); if(m) return isoFromDateParts(m[1],m[2],m[3]); m=/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2}|\d{4})$/.exec(src); if(m){ var first=Number(m[1]),second=Number(m[2]),day=first,month=second; if(first<=12&&second>12){ day=second; month=first; } return isoFromDateParts(m[3],month,day); } m=/^(\d{1,2})[\s\/.-]+([A-Za-z]{3,9})[\s\/.-]+(\d{2}|\d{4})$/.exec(src); if(m){ var namedMonth=monthNumberFromName(m[2]); if(namedMonth) return isoFromDateParts(m[3],namedMonth,m[1]); } m=/^([A-Za-z]{3,9})[\s\/.-]+(\d{1,2})(?:,)?[\s\/.-]+(\d{2}|\d{4})$/.exec(src); if(m){ var leadingMonth=monthNumberFromName(m[1]); if(leadingMonth) return isoFromDateParts(m[3],leadingMonth,m[2]); } return ''; }
+      function toIsoInputDate(v){ var src=s(v),m,iso=''; if(!src) return ''; src=src.replace(/[T\s]+\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/,''); if(/^(\d{4})-(\d{2})-(\d{2})$/.test(src)) return src; if(/^\d+(?:\.\d+)?$/.test(src)){ iso=excelSerialToIso(src); if(iso) return iso; } m=/^(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})$/.exec(src); if(m) return isoFromDateParts(m[1],m[2],m[3]); m=/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2}|\d{4})$/.exec(src); if(m){ var first=Number(m[1]),second=Number(m[2]),day=first,month=second; if(first<=12&&second>12){ day=second; month=first; } return isoFromDateParts(m[3],month,day); } m=/^(\d{1,2})[\s\/.-]+([A-Za-z]{3,9})[\s\/.-]+(\d{2}|\d{4})$/.exec(src); if(m){ var namedMonth=monthNumberFromName(m[2]); if(namedMonth) return isoFromDateParts(m[3],namedMonth,m[1]); } m=/^([A-Za-z]{3,9})[\s\/.-]+(\d{1,2})(?:,)?[\s\/.-]+(\d{2}|\d{4})$/.exec(src); if(m){ var leadingMonth=monthNumberFromName(m[1]); if(leadingMonth) return isoFromDateParts(m[3],leadingMonth,m[2]); } return ''; }
       function formatDateDisplay(v){ var iso=toIsoInputDate(v); return iso?toDisplayDate(iso):s(v); }
       function parseChapterValue(raw){ var value=s(raw),parts=value.split(' - '); return {chapter:s(parts.shift()),chapterDesc:s(parts.join(' - '))}; }
       function chapterDescriptionForCode(chapter){
@@ -1989,6 +2012,10 @@
         return completed;
       }
       function workbookDateValue(row){ return row&&row.__dateDirty?row['Date']:(s(row&&row.__rawDate)||s(row&&row['Date'])); }
+      function workbookSavedDateValue(row){
+        var iso=toIsoInputDate(workbookDateValue(row));
+        return iso?(iso.replace(/-/g,'/')+' 00:00'):'';
+      }
       function normalizeLoadedRow(row){ var rawDate=s(row&&row['Date']); row['Date']=formatDateDisplay(rawDate); row['Flags']=serializeFlagSelection(row&&row['Flags']); row[SUPERVISOR_ID_FIELD]=s(row&&row[SUPERVISOR_ID_FIELD]); row.__rawDate=rawDate; row.__dateDirty=false; return row; }
       function clearWorkbookState(){ rows=normalizeRows([]); AIRCRAFT_GROUP_ROWS=[]; AIRCRAFT_MAP=Object.create(null); CHAPTER_OPTIONS=defaultChapterOptions(); FLAG_RECORDS=defaultFlagRecords(); LOG_OWNER_INFO={ name:'', signature:'', stamp:'' }; APP_VIEW_SETTINGS=cloneAppViewSettings(DEFAULT_APP_VIEW_SETTINGS); rebuildSupervisorState([]); activeFilters=emptyFilterState(); draftFilters=emptyFilterState(); applySearchQuery(''); markSharedDatalistsDirty(); settingsDirty=false; resetSavedLogbookState(); syncMindMapButtonVisibility(); }
 
@@ -2176,11 +2203,10 @@
       function signedSlotFor(row){ var slot=Number(row&&row.__signedSlot); return isFinite(slot)&&slot>=0?slot:-1; }
       function setRowSignedState(row, signed, slotStart){ if(!row) return; row['Signed']=signed?'true':''; row.__signedSlot=signed&&isFinite(slotStart)&&slotStart>=0?slotStart:-1; }
       function initializeSignedSlots(list){
-        function sortByDate(a,b){ var da=parseDate(a['Date']),db=parseDate(b['Date']); if(da!==db) return da-db; return (Number(a.__rowId)||0)-(Number(b.__rowId)||0); }
         function nextSlotFit(start, units){ var offset=start%PAGE_SLOTS; if(offset&&offset+units>PAGE_SLOTS) return start+(PAGE_SLOTS-offset); return start; }
         var groups=groupRows(list||[]);
         for(var i=0;i<groups.length;i++){
-          var groupRowsSorted=(groups[i].rows||[]).slice().sort(sortByDate),cursor=0;
+          var groupRowsSorted=(groups[i].rows||[]).slice().sort(compareRowsOldestFirst),cursor=0;
           for(var j=0;j<groupRowsSorted.length;j++){
             var row=groupRowsSorted[j],slot=signedSlotFor(row),units=unitsFor(row);
             if(slot<0&&isRowSigned(row)){
@@ -2471,7 +2497,6 @@
       // Each task consumes one or more vertical "slots" on a page, so pagination is
       // based on rendered space rather than raw row count.
       function paginate(list){
-        function sortByDate(a,b){ var da=parseDate(a['Date']),db=parseDate(b['Date']); if(da!==db) return da-db; return (Number(a.__rowId)||0)-(Number(b.__rowId)||0); }
         function nextSlotFit(start, units){ var offset=start%PAGE_SLOTS; if(offset&&offset+units>PAGE_SLOTS) return start+(PAGE_SLOTS-offset); return start; }
         var signed=[],unsigned=[],placed=[],cursor=0,unsignedIndex=0,pages=[];
         for(var i=0;i<list.length;i++){
@@ -2479,8 +2504,8 @@
           if(entry.signed) signed.push(entry);
           else unsigned.push(entry);
         }
-        signed.sort(function(a,b){ if(a.signedSlot!==b.signedSlot) return a.signedSlot-b.signedSlot; return (Number(a.row.__rowId)||0)-(Number(b.row.__rowId)||0); });
-        unsigned.sort(function(a,b){ return sortByDate(a.row,b.row); });
+        signed.sort(function(a,b){ if(a.signedSlot!==b.signedSlot) return a.signedSlot-b.signedSlot; return compareRowsOldestFirst(a.row,b.row); });
+        unsigned.sort(function(a,b){ return compareRowsOldestFirst(a.row,b.row); });
         function placeUnsignedUntil(target){
           while(unsignedIndex<unsigned.length){
             var next=unsigned[unsignedIndex],start=nextSlotFit(cursor,next.units);
@@ -3310,7 +3335,7 @@
       function stateSheetDefinitions(){
         syncAllRowAircraftTypes();
         for(var r=0;r<rows.length;r++) applyRowReferenceData(rows[r]);
-        var logRows=rows.map(function(row){ var out={}; for(var i=0;i<LOG_HEADERS.length;i++) out[LOG_HEADERS[i]]=s(LOG_HEADERS[i]==='Date'?workbookDateValue(row):row[LOG_HEADERS[i]]); return out; });
+        var logRows=rows.slice().sort(compareRowsNewestFirst).map(function(row){ var out={}; for(var i=0;i<LOG_HEADERS.length;i++) out[LOG_HEADERS[i]]=s(LOG_HEADERS[i]==='Date'?workbookSavedDateValue(row):row[LOG_HEADERS[i]]); return out; });
         return [
           { title:'Logbook', headers:LOG_HEADERS, rows:logRows },
           { title:'Aircraft', headers:['Group','A/C Reg','Aircraft Type'], rows:aircraftWorkbookRows() },
