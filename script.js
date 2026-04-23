@@ -132,7 +132,6 @@
       var confirmOkBtn = document.getElementById('confirmOkBtn');
       var otherLayoutModal = document.getElementById('otherLayoutModal');
       var closeOtherLayoutModalBtn = document.getElementById('closeOtherLayoutModal');
-      var cancelOtherLayoutPrintBtn = document.getElementById('cancelOtherLayoutPrint');
       var resetOtherLayoutDefaultsBtn = document.getElementById('resetOtherLayoutDefaults');
       var printOtherLayoutConfirmBtn = document.getElementById('printOtherLayoutConfirm');
       var otherLayoutPreviewEl = document.getElementById('otherLayoutPreview');
@@ -151,18 +150,6 @@
       var otherOverlayRegHeaderEl = document.getElementById('otherOverlayRegHeader');
       var otherOverlayTaskHeaderEl = document.getElementById('otherOverlayTaskHeader');
       var otherOverlaySuperHeaderEl = document.getElementById('otherOverlaySuperHeader');
-      var otherLayoutTopEl = document.getElementById('otherLayoutTop');
-      var otherLayoutHeaderHeightEl = document.getElementById('otherLayoutHeaderHeight');
-      var otherLayoutLeftEl = document.getElementById('otherLayoutLeft');
-      var otherLayoutDateStartEl = document.getElementById('otherLayoutDateStart');
-      var otherLayoutRegStartEl = document.getElementById('otherLayoutRegStart');
-      var otherLayoutJobStartEl = document.getElementById('otherLayoutJobStart');
-      var otherLayoutTaskStartEl = document.getElementById('otherLayoutTaskStart');
-      var otherLayoutSuperStartEl = document.getElementById('otherLayoutSuperStart');
-      var otherLayoutEndEl = document.getElementById('otherLayoutEnd');
-      var otherLayoutRowHeightEl = document.getElementById('otherLayoutRowHeight');
-      var otherLayoutTextTopEl = document.getElementById('otherLayoutTextTop');
-      var otherLayoutTextLeftEl = document.getElementById('otherLayoutTextLeft');
       var googleSheetModal = document.getElementById('googleSheetModal');
       var closeGoogleSheetModalBtn = document.getElementById('closeGoogleSheetModal');
       var googleSheetModalTitleEl = document.getElementById('googleSheetModalTitle');
@@ -1409,42 +1396,9 @@
         otherOverlaySampleFrameEl.style.setProperty('--other-overlay-task-width-measure-width',taskWidth.toFixed(2)+'px');
         otherOverlaySampleFrameEl.style.setProperty('--other-overlay-task-width-measure-top',Math.max(0,rowRect.top-frameRect.top+rowRect.height+6).toFixed(2)+'px');
       }
-      function writeOtherLayoutModalValues(measurements){
+      function validatedOtherLayoutMeasurements(measurements){
         measurements=cloneMeasurementState(measurements);
-        if(otherLayoutTopEl) otherLayoutTopEl.value=measurements.top;
-        if(otherLayoutHeaderHeightEl) otherLayoutHeaderHeightEl.value=measurements.headerHeight;
-        if(otherLayoutLeftEl) otherLayoutLeftEl.value=measurements.left;
-        if(otherLayoutDateStartEl) otherLayoutDateStartEl.value=measurements.dateStart;
-        if(otherLayoutRegStartEl) otherLayoutRegStartEl.value=measurements.regStart;
-        if(otherLayoutJobStartEl) otherLayoutJobStartEl.value=measurements.jobStart;
-        if(otherLayoutTaskStartEl) otherLayoutTaskStartEl.value=measurements.taskStart;
-        if(otherLayoutSuperStartEl) otherLayoutSuperStartEl.value=measurements.superStart;
-        if(otherLayoutEndEl) otherLayoutEndEl.value=measurements.end;
-        if(otherLayoutRowHeightEl) otherLayoutRowHeightEl.value=measurements.rowHeight;
-        if(otherLayoutTextTopEl) otherLayoutTextTopEl.value=measurements.textTop;
-        if(otherLayoutTextLeftEl) otherLayoutTextLeftEl.value=measurements.textLeft;
-        updateOtherLayoutPreview(measurements);
-      }
-      function readOtherLayoutMeasurementInput(input, fallback){ var value=Number(input&&input.value); return isFinite(value)&&value>0?value:fallback; }
-      function previewOtherLayoutMeasurements(){
-        var left=readOtherLayoutMeasurementInput(otherLayoutLeftEl,otherLayoutMeasurements.left);
-        return {
-          top:readOtherLayoutMeasurementInput(otherLayoutTopEl,otherLayoutMeasurements.top),
-          headerHeight:readOtherLayoutMeasurementInput(otherLayoutHeaderHeightEl,otherLayoutMeasurements.headerHeight),
-          left:left,
-          dateStart:left,
-          regStart:readOtherLayoutMeasurementInput(otherLayoutRegStartEl,otherLayoutMeasurements.regStart),
-          jobStart:readOtherLayoutMeasurementInput(otherLayoutJobStartEl,otherLayoutMeasurements.jobStart),
-          taskStart:readOtherLayoutMeasurementInput(otherLayoutTaskStartEl,otherLayoutMeasurements.taskStart),
-          superStart:readOtherLayoutMeasurementInput(otherLayoutSuperStartEl,otherLayoutMeasurements.superStart),
-          end:readOtherLayoutMeasurementInput(otherLayoutEndEl,otherLayoutMeasurements.end),
-          rowHeight:readOtherLayoutMeasurementInput(otherLayoutRowHeightEl,otherLayoutMeasurements.rowHeight),
-          textTop:readOtherLayoutMeasurementInput(otherLayoutTextTopEl,otherLayoutMeasurements.textTop),
-          textLeft:readOtherLayoutMeasurementInput(otherLayoutTextLeftEl,otherLayoutMeasurements.textLeft)
-        };
-      }
-      function readOtherLayoutModalValues(){
-        var measurements=previewOtherLayoutMeasurements();
+        measurements.dateStart=measurements.left;
         if(!(measurements.top>=0)){
           throw new Error('Top value must be zero or greater.');
         }
@@ -1454,9 +1408,19 @@
         return measurements;
       }
       function openOtherLayoutModal(){
-        writeOtherLayoutModalValues(otherLayoutMeasurements);
+        updateOtherLayoutPreview(otherLayoutMeasurements);
         if(otherLayoutModal) otherLayoutModal.className='modal-backdrop open';
         if(otherOverlayTopMeasureValueEl) setTimeout(function(){ otherOverlayTopMeasureValueEl.focus(); if(otherOverlayTopMeasureValueEl.select) otherOverlayTopMeasureValueEl.select(); },0);
+      }
+      function bindOtherLayoutMeasurementInput(input, applyValue){
+        if(!input) return;
+        input.addEventListener('input',function(){
+          var value=Number(input.value);
+          if(!isFinite(value)||value<=0) return;
+          applyValue(value);
+          updateOtherLayoutPreview(otherLayoutMeasurements);
+        });
+        input.addEventListener('blur',function(){ updateOtherLayoutPreview(otherLayoutMeasurements); });
       }
       function closeOtherLayoutModal(){ if(otherLayoutModal) otherLayoutModal.className='modal-backdrop'; }
       function rowMatchesFilters(row){ var i; if(activeFilters.aircraftType.length){ var typeMatch=false,rowAircraftFilterText=normalizedText(aircraftFilterValueForRow(row)); for(i=0;i<activeFilters.aircraftType.length;i++){ if(rowAircraftFilterText.indexOf(normalizedText(activeFilters.aircraftType[i]))!==-1){ typeMatch=true; break; } } if(!typeMatch) return false; } if(activeFilters.aircraftReg.length){ var regMatch=false; for(i=0;i<activeFilters.aircraftReg.length;i++){ if(normalizedText(s(row['A/C Reg'])).indexOf(normalizedText(activeFilters.aircraftReg[i]))!==-1){ regMatch=true; break; } } if(!regMatch) return false; } if(activeFilters.supervisor.length){ var supervisorName=normalizedText(s(row['Approval Name'])),supervisorFull=normalizedText([s(row['Approval Name']),s(row['Approval stamp']),s(row['Aprroval Licence No.'])].filter(Boolean).join(' | ')),supervisorMatch=false; for(i=0;i<activeFilters.supervisor.length;i++){ var supervisorNeedle=normalizedText(activeFilters.supervisor[i]); if(supervisorName.indexOf(supervisorNeedle)!==-1||supervisorFull.indexOf(supervisorNeedle)!==-1){ supervisorMatch=true; break; } } if(!supervisorMatch) return false; } if(activeFilters.chapter.length){ var chapterMatch=false; for(i=0;i<activeFilters.chapter.length;i++){ var chapterNeedle=activeFilters.chapter[i]; if(chapterNeedle===BLANK_CHAPTER_FILTER){ if(!s(row['Chapter'])){ chapterMatch=true; break; } continue; } chapterNeedle=normalizedText(chapterNeedle); if(normalizedText(chapterLabelText(row)).indexOf(chapterNeedle)!==-1||normalizedText(s(row['Chapter']))===chapterNeedle){ chapterMatch=true; break; } } if(!chapterMatch) return false; } return true; }
@@ -2611,7 +2575,7 @@
       function printCurrentOtherLayout(){ var current=currentVisiblePage(),pages=pageElements(); clearPrintSelection(); if(!current||!pages.length){ window.print(); return; } writeOtherLayoutPrintCssVars(current,otherLayoutMeasurements); document.body.classList.add('print-current-other-layout'); for(var i=0;i<pages.length;i++){ if(pages[i]!==current) pages[i].classList.add('print-exclude'); } printMode='current-other-layout'; window.print(); }
       function printSupervisorList(){ clearPrintSelection(); if(!supervisorPrintHost){ window.print(); return; } supervisorPrintHost.innerHTML=renderSupervisorListPages(); document.body.classList.add('print-supervisor-list'); printMode='supervisor-list'; window.print(); }
       function printAllPages(){ clearPrintSelection(); printMode='all'; window.print(); }
-      function confirmOtherLayoutPrint(){ otherLayoutMeasurements=readOtherLayoutModalValues(); closeOtherLayoutModal(); printCurrentOtherLayout(); }
+      function confirmOtherLayoutPrint(){ otherLayoutMeasurements=validatedOtherLayoutMeasurements(otherLayoutMeasurements); closeOtherLayoutModal(); printCurrentOtherLayout(); }
 
       // ---- Editor active state ----
       function editorIsActive(){ var active=document.activeElement; if(!active) return false; return !!(pagesEl.contains(active)&&(active.matches('input, textarea, [contenteditable="true"]')||active.classList.contains('editable-cell'))); }
@@ -3785,87 +3749,20 @@
       if(confirmOkBtn) confirmOkBtn.onclick=function(){ closeConfirmDialog(true); };
       if(confirmModal) confirmModal.onclick=function(ev){ if(ev.target===confirmModal) closeConfirmDialog(false); };
       if(closeOtherLayoutModalBtn) closeOtherLayoutModalBtn.onclick=closeOtherLayoutModal;
-      if(cancelOtherLayoutPrintBtn) cancelOtherLayoutPrintBtn.onclick=closeOtherLayoutModal;
-      if(resetOtherLayoutDefaultsBtn) resetOtherLayoutDefaultsBtn.onclick=function(){ otherLayoutMeasurements=cloneMeasurementState(OTHER_LAYOUT_DEFAULTS); writeOtherLayoutModalValues(otherLayoutMeasurements); if(otherOverlayTopMeasureValueEl) otherOverlayTopMeasureValueEl.focus(); };
+      if(resetOtherLayoutDefaultsBtn) resetOtherLayoutDefaultsBtn.onclick=function(){ otherLayoutMeasurements=cloneMeasurementState(OTHER_LAYOUT_DEFAULTS); updateOtherLayoutPreview(otherLayoutMeasurements); if(otherOverlayTopMeasureValueEl) otherOverlayTopMeasureValueEl.focus(); };
       if(printOtherLayoutConfirmBtn) printOtherLayoutConfirmBtn.onclick=confirmOtherLayoutPrint;
       if(otherLayoutModal) otherLayoutModal.onclick=function(ev){ if(ev.target===otherLayoutModal) closeOtherLayoutModal(); };
-      if(otherOverlayTopMeasureValueEl){
-        otherOverlayTopMeasureValueEl.addEventListener('input',function(){
-          var value=Number(otherOverlayTopMeasureValueEl.value);
-          if(!isFinite(value)||value<=0) return;
-          otherLayoutMeasurements.top=value;
-          updateOtherLayoutPreview(otherLayoutMeasurements);
-        });
-        otherOverlayTopMeasureValueEl.addEventListener('blur',function(){ updateOtherLayoutPreview(otherLayoutMeasurements); });
-      }
-      if(otherOverlayRowMeasureValueEl){
-        otherOverlayRowMeasureValueEl.addEventListener('input',function(){
-          var value=Number(otherOverlayRowMeasureValueEl.value);
-          if(!isFinite(value)||value<=0) return;
-          otherLayoutMeasurements.rowHeight=value;
-          updateOtherLayoutPreview(otherLayoutMeasurements);
-        });
-        otherOverlayRowMeasureValueEl.addEventListener('blur',function(){ updateOtherLayoutPreview(otherLayoutMeasurements); });
-      }
-      if(otherOverlayTaskMeasureValueEl){
-        otherOverlayTaskMeasureValueEl.addEventListener('input',function(){
-          var value=Number(otherOverlayTaskMeasureValueEl.value);
-          if(!isFinite(value)||value<=0) return;
-          otherLayoutMeasurements.taskStart=value;
-          updateOtherLayoutPreview(otherLayoutMeasurements);
-        });
-        otherOverlayTaskMeasureValueEl.addEventListener('blur',function(){ updateOtherLayoutPreview(otherLayoutMeasurements); });
-      }
-      if(otherOverlayTaskWidthMeasureValueEl){
-        otherOverlayTaskWidthMeasureValueEl.addEventListener('input',function(){
-          var value=Number(otherOverlayTaskWidthMeasureValueEl.value);
-          if(!isFinite(value)||value<=0) return;
-          otherLayoutMeasurements.superStart=otherLayoutMeasurements.taskStart+value;
-          updateOtherLayoutPreview(otherLayoutMeasurements);
-        });
-        otherOverlayTaskWidthMeasureValueEl.addEventListener('blur',function(){ updateOtherLayoutPreview(otherLayoutMeasurements); });
-      }
-      if(otherOverlayDateMeasureValueEl){
-        otherOverlayDateMeasureValueEl.addEventListener('input',function(){
-          var value=Number(otherOverlayDateMeasureValueEl.value);
-          if(!isFinite(value)||value<=0) return;
-          otherLayoutMeasurements.dateStart=otherLayoutMeasurements.left;
-          otherLayoutMeasurements.regStart=otherLayoutMeasurements.left+value;
-          updateOtherLayoutPreview(otherLayoutMeasurements);
-        });
-        otherOverlayDateMeasureValueEl.addEventListener('blur',function(){ updateOtherLayoutPreview(otherLayoutMeasurements); });
-      }
-      if(otherOverlayRegMeasureValueEl){
-        otherOverlayRegMeasureValueEl.addEventListener('input',function(){
-          var value=Number(otherOverlayRegMeasureValueEl.value);
-          if(!isFinite(value)||value<=0) return;
-          otherLayoutMeasurements.jobStart=otherLayoutMeasurements.regStart+value;
-          updateOtherLayoutPreview(otherLayoutMeasurements);
-        });
-        otherOverlayRegMeasureValueEl.addEventListener('blur',function(){ updateOtherLayoutPreview(otherLayoutMeasurements); });
-      }
-      if(otherOverlayJobMeasureValueEl){
-        otherOverlayJobMeasureValueEl.addEventListener('input',function(){
-          var value=Number(otherOverlayJobMeasureValueEl.value);
-          if(!isFinite(value)||value<=0) return;
-          otherLayoutMeasurements.taskStart=otherLayoutMeasurements.jobStart+value;
-          updateOtherLayoutPreview(otherLayoutMeasurements);
-        });
-        otherOverlayJobMeasureValueEl.addEventListener('blur',function(){ updateOtherLayoutPreview(otherLayoutMeasurements); });
-      }
-      if(otherOverlaySuperMeasureValueEl){
-        otherOverlaySuperMeasureValueEl.addEventListener('input',function(){
-          var value=Number(otherOverlaySuperMeasureValueEl.value);
-          if(!isFinite(value)||value<=0) return;
-          otherLayoutMeasurements.end=otherLayoutMeasurements.superStart+value;
-          updateOtherLayoutPreview(otherLayoutMeasurements);
-        });
-        otherOverlaySuperMeasureValueEl.addEventListener('blur',function(){ updateOtherLayoutPreview(otherLayoutMeasurements); });
-      }
-      [otherLayoutTopEl,otherLayoutHeaderHeightEl,otherLayoutLeftEl,otherLayoutDateStartEl,otherLayoutRegStartEl,otherLayoutJobStartEl,otherLayoutTaskStartEl,otherLayoutSuperStartEl,otherLayoutEndEl,otherLayoutRowHeightEl,otherLayoutTextTopEl,otherLayoutTextLeftEl].forEach(function(input){
-        if(!input) return;
-        input.addEventListener('input',function(){ updateOtherLayoutPreview(previewOtherLayoutMeasurements()); });
+      bindOtherLayoutMeasurementInput(otherOverlayTopMeasureValueEl,function(value){ otherLayoutMeasurements.top=value; });
+      bindOtherLayoutMeasurementInput(otherOverlayRowMeasureValueEl,function(value){ otherLayoutMeasurements.rowHeight=value; });
+      bindOtherLayoutMeasurementInput(otherOverlayTaskMeasureValueEl,function(value){ otherLayoutMeasurements.taskStart=value; });
+      bindOtherLayoutMeasurementInput(otherOverlayTaskWidthMeasureValueEl,function(value){ otherLayoutMeasurements.superStart=otherLayoutMeasurements.taskStart+value; });
+      bindOtherLayoutMeasurementInput(otherOverlayDateMeasureValueEl,function(value){
+        otherLayoutMeasurements.dateStart=otherLayoutMeasurements.left;
+        otherLayoutMeasurements.regStart=otherLayoutMeasurements.left+value;
       });
+      bindOtherLayoutMeasurementInput(otherOverlayRegMeasureValueEl,function(value){ otherLayoutMeasurements.jobStart=otherLayoutMeasurements.regStart+value; });
+      bindOtherLayoutMeasurementInput(otherOverlayJobMeasureValueEl,function(value){ otherLayoutMeasurements.taskStart=otherLayoutMeasurements.jobStart+value; });
+      bindOtherLayoutMeasurementInput(otherOverlaySuperMeasureValueEl,function(value){ otherLayoutMeasurements.end=otherLayoutMeasurements.superStart+value; });
       window.addEventListener('resize',function(){ if(otherLayoutModal&&otherLayoutModal.classList.contains('open')) requestAnimationFrame(syncOtherOverlaySampleGuide); });
       window.addEventListener('resize',function(){
         if(!mindMapModal||!mindMapModal.classList.contains('open')) return;
