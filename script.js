@@ -1424,7 +1424,7 @@
         input.addEventListener('blur',function(){ updateOtherLayoutPreview(otherLayoutMeasurements); });
       }
       function closeOtherLayoutModal(){ if(otherLayoutModal) otherLayoutModal.className='modal-backdrop'; }
-      function rowMatchesFilters(row){ var i; if(activeFilters.aircraftType.length){ var typeMatch=false,rowAircraftFilterText=normalizedText(aircraftFilterValueForRow(row)); for(i=0;i<activeFilters.aircraftType.length;i++){ if(rowAircraftFilterText.indexOf(normalizedText(activeFilters.aircraftType[i]))!==-1){ typeMatch=true; break; } } if(!typeMatch) return false; } if(activeFilters.aircraftReg.length){ var regMatch=false; for(i=0;i<activeFilters.aircraftReg.length;i++){ if(normalizedText(s(row['A/C Reg'])).indexOf(normalizedText(activeFilters.aircraftReg[i]))!==-1){ regMatch=true; break; } } if(!regMatch) return false; } if(activeFilters.supervisor.length){ var supervisorName=normalizedText(s(row['Approval Name'])),supervisorFull=normalizedText([s(row['Approval Name']),s(row['Approval stamp']),s(row['Aprroval Licence No.'])].filter(Boolean).join(' | ')),supervisorMatch=false; for(i=0;i<activeFilters.supervisor.length;i++){ var supervisorNeedle=normalizedText(activeFilters.supervisor[i]); if(supervisorName.indexOf(supervisorNeedle)!==-1||supervisorFull.indexOf(supervisorNeedle)!==-1){ supervisorMatch=true; break; } } if(!supervisorMatch) return false; } if(activeFilters.chapter.length){ var chapterMatch=false; for(i=0;i<activeFilters.chapter.length;i++){ var chapterNeedle=activeFilters.chapter[i]; if(chapterNeedle===BLANK_CHAPTER_FILTER){ if(!s(row['Chapter'])){ chapterMatch=true; break; } continue; } chapterNeedle=normalizedText(chapterNeedle); if(normalizedText(chapterLabelText(row)).indexOf(chapterNeedle)!==-1||normalizedText(s(row['Chapter']))===chapterNeedle){ chapterMatch=true; break; } } if(!chapterMatch) return false; } return true; }
+      function rowMatchesFilters(row){ var i; if(activeFilters.aircraftType.length){ var typeMatch=false,rowAircraftFilterText=normalizedText(aircraftFilterValueForRow(row)); for(i=0;i<activeFilters.aircraftType.length;i++){ if(rowAircraftFilterText.indexOf(normalizedText(activeFilters.aircraftType[i]))!==-1){ typeMatch=true; break; } } if(!typeMatch) return false; } if(activeFilters.aircraftReg.length){ var regMatch=false; for(i=0;i<activeFilters.aircraftReg.length;i++){ if(normalizedText(s(row['A/C Reg'])).indexOf(normalizedText(activeFilters.aircraftReg[i]))!==-1){ regMatch=true; break; } } if(!regMatch) return false; } if(activeFilters.supervisor.length){ var supervisorName=normalizedText(supervisorNameView(row)),supervisorFull=normalizedText([supervisorNameView(row),supervisorStampView(row),supervisorLicenceView(row)].filter(Boolean).join(' | ')),supervisorMatch=false; for(i=0;i<activeFilters.supervisor.length;i++){ var supervisorNeedle=normalizedText(activeFilters.supervisor[i]); if(supervisorName.indexOf(supervisorNeedle)!==-1||supervisorFull.indexOf(supervisorNeedle)!==-1){ supervisorMatch=true; break; } } if(!supervisorMatch) return false; } if(activeFilters.chapter.length){ var chapterMatch=false; for(i=0;i<activeFilters.chapter.length;i++){ var chapterNeedle=activeFilters.chapter[i]; if(chapterNeedle===BLANK_CHAPTER_FILTER){ if(!s(row['Chapter'])){ chapterMatch=true; break; } continue; } chapterNeedle=normalizedText(chapterNeedle); if(normalizedText(chapterLabelText(row)).indexOf(chapterNeedle)!==-1||normalizedText(s(row['Chapter']))===chapterNeedle){ chapterMatch=true; break; } } if(!chapterMatch) return false; } return true; }
       function normalizeSearchText(value){ return String(value==null?'':value).toLowerCase().replace(/\s+/g,' ').trim(); }
       function rowSearchHaystack(row){
         row=row||{};
@@ -1486,6 +1486,15 @@
       }
       function normalizedText(value){ return s(value).toLowerCase(); }
       function chapterLabelText(row){ var completed=completeChapterParts(row&&row['Chapter'],row&&row['Chapter Description']); return completed.chapterDesc?(completed.chapter+' - '+completed.chapterDesc):completed.chapter; }
+      function rowChapterDescriptionView(row){ return s(row&&row['Chapter Description'])||chapterDescriptionForCode(row&&row['Chapter']); }
+      function supervisorReferenceForRow(row){
+        var supervisorId=s(row&&row[SUPERVISOR_ID_FIELD]),record=supervisorId?supervisorRecordForId(supervisorId):null;
+        if(!record&&s(row&&row['Approval Name'])) record=supervisorRecordFor(row['Approval Name']);
+        return record||null;
+      }
+      function supervisorNameView(row){ var record=supervisorReferenceForRow(row); return s(row&&row['Approval Name'])||s(record&&record.name); }
+      function supervisorStampView(row){ var record=supervisorReferenceForRow(row); return s(row&&row['Approval stamp'])||s(record&&record.stamp); }
+      function supervisorLicenceView(row){ var record=supervisorReferenceForRow(row); return s(row&&row['Aprroval Licence No.'])||s(record&&record.licence); }
       function fieldAffectsRowLayout(field){ return field==='Task Detail'||field==='Rewriten for cap741'||field==='Approval Name'||field==='Aprroval Licence No.'; }
       function fieldNeedsLiveLayoutRefresh(field){ return field==='Task Detail'||field==='Rewriten for cap741'||field==='Approval Name'||field==='Aprroval Licence No.'; }
       function liveLayoutUnitsForField(row, field){
@@ -2011,8 +2020,22 @@
         if(!row) return { chapter:'', chapterDesc:'' };
         var completed=completeChapterParts(row['Chapter'],row['Chapter Description']);
         row['Chapter']=completed.chapter;
-        row['Chapter Description']=completed.chapterDesc;
+        if(!referenceOnlySaveEnabled()||s(row['Chapter Description'])) row['Chapter Description']=completed.chapterDesc;
         return completed;
+      }
+      function syncRowsToReferenceFillMode(){
+        for(var i=0;i<rows.length;i++){
+          var row=rows[i];
+          if(!row) continue;
+          if(referenceOnlySaveEnabled()){
+            var chapter=s(row['Chapter']),referenceDesc=chapterDescriptionForCode(chapter),supervisorRecord=null;
+            if(!row.__manualChapterDescription&&s(row['Chapter Description'])===referenceDesc) row['Chapter Description']='';
+            supervisorRecord=supervisorRecordForId(row[SUPERVISOR_ID_FIELD])||(!s(row[SUPERVISOR_ID_FIELD])&&s(row['Approval Name'])?supervisorRecordFor(row['Approval Name']):null);
+            if(supervisorRecord&&!row.__manualApprovalLicenceNo&&s(row['Aprroval Licence No.'])===s(supervisorRecord.licence)) row['Aprroval Licence No.']='';
+          } else {
+            applyRowReferenceData(row);
+          }
+        }
       }
       function workbookDateValue(row){ return row&&row.__dateDirty?row['Date']:(s(row&&row.__rawDate)||s(row&&row['Date'])); }
       function workbookSavedDateValue(row){
@@ -2206,7 +2229,7 @@
           if(!s(row[SUPERVISOR_ID_FIELD])) row[SUPERVISOR_ID_FIELD]=s(record.id);
           if(!s(row['Approval Name'])) row['Approval Name']=s(record.name);
           if(!s(row['Approval stamp'])) row['Approval stamp']=s(record.stamp);
-          if(!s(row['Aprroval Licence No.'])) row['Aprroval Licence No.']=s(record.licence);
+          if(!s(row['Aprroval Licence No.'])&&!referenceOnlySaveEnabled()) row['Aprroval Licence No.']=s(record.licence);
           return record;
         }
         return null;
@@ -2216,14 +2239,14 @@
         if(!nameInput) return null;
         var resolved=normalizeSupervisorValue(nameInput.value);
         if(resolved.name) nameInput.value=resolved.name;
-        if(licenceInput&&resolved.licence) licenceInput.value=resolved.licence;
+        if(licenceInput&&resolved.licence&&!referenceOnlySaveEnabled()) licenceInput.value=resolved.licence;
         if(row){
           row[SUPERVISOR_ID_FIELD]=resolved.id||'';
           row['Approval Name']=resolved.name;
           row['Approval stamp']=resolved.stamp;
           row.__manualApprovalName=!!resolved.name;
           row.__manualApprovalStamp=false;
-          if(resolved.licence) row['Aprroval Licence No.']=resolved.licence;
+          if(resolved.licence&&!referenceOnlySaveEnabled()) row['Aprroval Licence No.']=resolved.licence;
         }
         return resolved;
       }
@@ -2232,7 +2255,7 @@
         row[SUPERVISOR_ID_FIELD]=resolved.id||'';
         row['Approval Name']=resolved.name;
         row['Approval stamp']=resolved.stamp;
-        row['Aprroval Licence No.']=licenceValue||resolved.licence||'';
+        row['Aprroval Licence No.']=licenceValue||(!referenceOnlySaveEnabled()?resolved.licence:'')||'';
         row.__manualApprovalName=!!resolved.name;
         row.__manualApprovalStamp=false;
         row.__manualApprovalLicenceNo=!!s(licenceValue);
@@ -2504,9 +2527,9 @@
           row=list[i];
           label=s(rowPageGroupingLabel(row,mode));
           key=rowPageGroupingKey(row,mode);
-          if(!map[key]) map[key]={ key:key, mode:mode, groupLabel:label, chapter:s(row['Chapter']), chapterDesc:s(row['Chapter Description']), rows:[], typeList:[], _typeSeen:Object.create(null) };
+          if(!map[key]) map[key]={ key:key, mode:mode, groupLabel:label, chapter:s(row['Chapter']), chapterDesc:rowChapterDescriptionView(row), rows:[], typeList:[], _typeSeen:Object.create(null) };
           bucket=map[key];
-          if(!bucket.chapterDesc) bucket.chapterDesc=s(row['Chapter Description']);
+          if(!bucket.chapterDesc) bucket.chapterDesc=rowChapterDescriptionView(row);
           bucket.rows.push(row);
           typeLabel=s(aircraftLabel(row));
           if(typeLabel&&!bucket._typeSeen[typeLabel]){
@@ -2638,7 +2661,7 @@
       }
       // Main UI render pass. This rebuilds the visible pages from the current in-memory
       // state instead of diffing small DOM fragments, which keeps layout logic simpler.
-      function renderAll(){ try { taskTextMeasureCache=null; for(var r=0;r<rows.length;r++) applyRowReferenceData(rows[r]); syncMindMapButtonVisibility(); syncFilterAircraftModeUi(); syncFilterButtonState(); syncSearchUi(); renderFilterStrip(); var activeRows=workbookContentRows(rows),visibleRows=activeRows.filter(function(row){ return rowMatchesSearch(row)&&(!hasActiveFilters()||rowMatchesFilters(row)); }),preserveFilteredSlots=shouldPreserveFilteredRowSlots(); if(!visibleRows.length){ syncSharedDatalists(sharedDatalistsHtml()); pagesEl.innerHTML=renderEmptyState(); return; } var renderedGroups=buildRenderedGroups(activeRows,visibleRows),html=[]; syncSharedDatalists(sharedDatalistsHtml()+renderedGroupDatalistsHtml(renderedGroups)); for(var i=0;i<renderedGroups.length;i++){ var group=renderedGroups[i].group,pages=renderedGroups[i].pages; for(var j=0;j<pages.length;j++){ var pageKey=(s(group.key)+'||'+pages[j].map(function(item){ return item.row.__rowId; }).join('-')); html.push(renderDataPage(group,pages[j],pageKey,preserveFilteredSlots)); } } pagesEl.innerHTML=html.join(''); } catch(e){ fail('Could not render pages: '+e.message); } }
+      function renderAll(){ try { taskTextMeasureCache=null; syncMindMapButtonVisibility(); syncFilterAircraftModeUi(); syncFilterButtonState(); syncSearchUi(); renderFilterStrip(); var activeRows=workbookContentRows(rows),visibleRows=activeRows.filter(function(row){ return rowMatchesSearch(row)&&(!hasActiveFilters()||rowMatchesFilters(row)); }),preserveFilteredSlots=shouldPreserveFilteredRowSlots(); if(!visibleRows.length){ syncSharedDatalists(sharedDatalistsHtml()); pagesEl.innerHTML=renderEmptyState(); return; } var renderedGroups=buildRenderedGroups(activeRows,visibleRows),html=[]; syncSharedDatalists(sharedDatalistsHtml()+renderedGroupDatalistsHtml(renderedGroups)); for(var i=0;i<renderedGroups.length;i++){ var group=renderedGroups[i].group,pages=renderedGroups[i].pages; for(var j=0;j<pages.length;j++){ var pageKey=(s(group.key)+'||'+pages[j].map(function(item){ return item.row.__rowId; }).join('-')); html.push(renderDataPage(group,pages[j],pageKey,preserveFilteredSlots)); } } pagesEl.innerHTML=html.join(''); } catch(e){ fail('Could not render pages: '+e.message); } }
       async function renderAllWithLoading(title, text){ setLoadingState(true,title||'Loading logbook',text||'Rendering logbook pages...'); await nextPaint(); renderAll(); }
 
       // ---- Modal editor ----
@@ -2700,7 +2723,7 @@
       function manualPageToLogRows(page){
         var heads=page.heads||{},chapterInfo=completeChapterParts(parseChapterValue(heads.chapter).chapter,parseChapterValue(heads.chapter).chapterDesc),out=[];
         for(var i=0;i<(page.rows||[]).length;i++){
-          var item=page.rows[i],row={'Aircraft Type':s(heads.type)||AIRCRAFT_MAP[s(item.reg).toUpperCase()]||'','A/C Reg':s(item.reg).toUpperCase(),'Chapter':chapterInfo.chapter,'Chapter Description':chapterInfo.chapterDesc,'Date':formatDateDisplay(item.date),'Job No':s(item.job),'FAULT':'','Task Detail':s(item.task),'Rewriten for cap741':s(item.task),'Flags':'',[SUPERVISOR_ID_FIELD]:'','Approval Name':s(item.supName),'Approval stamp':s(item.supStamp)||(supervisorRecordFor(item.supName)||{}).stamp||'','Aprroval Licence No.':s(item.supLicence)||(supervisorRecordFor(item.supName)||{}).licence||''};
+          var item=page.rows[i],supervisorRecord=supervisorRecordFor(item.supName)||{},row={'Aircraft Type':s(heads.type)||AIRCRAFT_MAP[s(item.reg).toUpperCase()]||'','A/C Reg':s(item.reg).toUpperCase(),'Chapter':chapterInfo.chapter,'Chapter Description':referenceOnlySaveEnabled()?'':chapterInfo.chapterDesc,'Date':formatDateDisplay(item.date),'Job No':s(item.job),'FAULT':'','Task Detail':s(item.task),'Rewriten for cap741':s(item.task),'Flags':'',[SUPERVISOR_ID_FIELD]:'','Approval Name':s(item.supName),'Approval stamp':s(item.supStamp)||s(supervisorRecord.stamp)||'','Aprroval Licence No.':s(item.supLicence)||(!referenceOnlySaveEnabled()?s(supervisorRecord.licence):'')};
           applyRowReferenceData(row);
           out.push(row);
         }
@@ -3403,7 +3426,6 @@
         initializeSignedSlots(rows);
         applyChapterRows((sheetObjects.Chapters||[]).map(function(r){ return {chapter:r.Chapter,description:r.Description}; }));
         rebuildSupervisorState((sheetObjects.Supervisors||[]).map(function(r){ return {id:r.ID,name:r['Signatory Name'],stamp:r.Stamp,licence:r['License Number'],scope:r['Scope / Limitations'],date:r.Date}; }));
-        for(var m=0;m<rows.length;m++) applyRowReferenceData(rows[m]);
         applyFlagRows(sheetObjects.Flags||[]);
         LOG_OWNER_INFO={ name:'', signature:'', stamp:'' };
         APP_VIEW_SETTINGS=cloneAppViewSettings(DEFAULT_APP_VIEW_SETTINGS);
@@ -3417,6 +3439,7 @@
           if(key==='page grouping'||key==='organize pages by'||key==='page grouping mode') APP_VIEW_SETTINGS.pageGrouping=normalizePageGrouping(value);
           if(key==='reference save'||key==='save reference values'||key==='reference-only save'||key==='reference only save') APP_VIEW_SETTINGS.referenceOnlySave=boolSettingValue(value,DEFAULT_APP_VIEW_SETTINGS.referenceOnlySave);
         }
+        syncRowsToReferenceFillMode();
         markSharedDatalistsDirty();
         resetSavedLogbookState();
         settingsDirty=false;
@@ -3787,6 +3810,7 @@
         if(settingsActiveTab==='view'){
           APP_VIEW_SETTINGS=cloneAppViewSettings(collectAppViewSettingsFromModal());
           syncMindMapButtonVisibility();
+          syncRowsToReferenceFillMode();
         } else if(settingsActiveTab==='aircraft'){
           applyAircraftGroupRows(collectSettingsTable('aircraft').map(function(r){ return {group:r.Group,reg:r['A/C Reg'],type:r['Aircraft Type']}; }));
         } else if(settingsActiveTab==='chapters'){
@@ -4178,7 +4202,7 @@
           for(var i=0;i<grpRows.length;i++) grpRows[i]['Aircraft Type']=nextType;
         } else if(groupInput.getAttribute('data-group-field')==='Chapter'){
           var parsedChapter=parseChapterValue(valueOf(groupInput)),completedChapter=completeChapterParts(parsedChapter.chapter,parsedChapter.chapterDesc);
-          nextChapter=completedChapter.chapter; nextChapterDesc=completedChapter.chapterDesc;
+          nextChapter=completedChapter.chapter; nextChapterDesc=referenceOnlySaveEnabled()?s(parsedChapter.chapterDesc):completedChapter.chapterDesc;
           for(var j=0;j<grpRows.length;j++){ grpRows[j]['Chapter']=nextChapter; grpRows[j]['Chapter Description']=nextChapterDesc; grpRows[j].__manualChapterDescription=!!s(parsedChapter.chapterDesc); }
         }
         if(mode===PAGE_GROUPING_GROUP){
