@@ -52,7 +52,8 @@
       var DEFAULT_WORKBOOK_PATH = './cap741-data.xlsx';
       var BLANK_CHAPTER_FILTER = 'No Chapter';
       var SUPERVISOR_ID_FIELD = 'Supervisor ID';
-      var LOG_HEADERS = ['Aircraft Type','A/C Reg','Chapter','Chapter Description','Date','Job No','FAULT','Task Detail','Rewriten for cap741','Flags',SUPERVISOR_ID_FIELD,'Approval Name','Approval stamp','Aprroval Licence No.','Signed'];
+      var MANUAL_DETAIL_FIELD = 'Manual Detail';
+      var LOG_HEADERS = ['Aircraft Type','A/C Reg','Chapter','Chapter Description','Date','Job No','FAULT','Task Detail','Rewriten for cap741',MANUAL_DETAIL_FIELD,'Flags',SUPERVISOR_ID_FIELD,'Approval Name','Approval stamp','Aprroval Licence No.','Signed'];
       var DATE_PLACEHOLDER = 'dd/MMM/yyyy';
       var FILTER_KEYS = ['aircraftType','aircraftReg','supervisor','chapter'];
       var STORAGE_SOURCE_NONE = 'none';
@@ -167,6 +168,7 @@
       var detailFaultEl = document.getElementById('detailFault');
       var detailTaskEl = document.getElementById('detailTask');
       var detailRewriteEl = document.getElementById('detailRewrite');
+      var detailManualEl = document.getElementById('detailManual');
       var sharedListsEl = document.getElementById('sharedLists');
       var detailFlagsPrimaryEl = document.getElementById('detailFlagsPrimary');
       var detailFlagsMoreWrapEl = document.getElementById('detailFlagsMoreWrap');
@@ -1430,10 +1432,10 @@
       function normalizeSearchText(value){ return String(value==null?'':value).toLowerCase().replace(/\s+/g,' ').trim(); }
       function rowSearchHaystack(row){
         row=row||{};
-        var key=[row['Job No']||'',row['Task Detail']||'',row['Rewriten for cap741']||'',row['Flags']||''].join('\u0001');
+        var key=[row['Job No']||'',row['Task Detail']||'',row['Rewriten for cap741']||'',row[MANUAL_DETAIL_FIELD]||'',row['Flags']||''].join('\u0001');
         if(row.__searchCacheKey!==key){
           row.__searchCacheKey=key;
-          row.__searchCacheValue=normalizeSearchText((row['Job No']||'')+' '+(row['Task Detail']||'')+' '+(row['Rewriten for cap741']||'')+' '+(row['Flags']||''));
+          row.__searchCacheValue=normalizeSearchText((row['Job No']||'')+' '+(row['Task Detail']||'')+' '+(row['Rewriten for cap741']||'')+' '+manualDetailPlainText(row[MANUAL_DETAIL_FIELD])+' '+(row['Flags']||''));
         }
         return row.__searchCacheValue||'';
       }
@@ -1487,6 +1489,44 @@
         sharedListsEl.__renderedHtml=nextHtml;
       }
       function normalizedText(value){ return s(value).toLowerCase(); }
+      function manualDetailPlainText(value){
+        var html=s(value);
+        if(!html) return '';
+        if(typeof document!=='undefined'&&document.createElement){
+          var el=document.createElement('div');
+          el.innerHTML=html;
+          return s(el.textContent||el.innerText||'');
+        }
+        return html.replace(/<[^>]+>/g,' ');
+      }
+      function sanitizeManualDetailHtml(value){
+        var html=s(value);
+        if(!html) return '';
+        if(typeof document==='undefined'||!document.createElement) return esc(html);
+        var root=document.createElement('div'),allowed={B:1,STRONG:1,I:1,EM:1,U:1,BR:1,DIV:1,P:1,UL:1,OL:1,LI:1};
+        root.innerHTML=html;
+        function clean(node){
+          var child=node.firstChild,next,replacement;
+          while(child){
+            next=child.nextSibling;
+            if(child.nodeType===1){
+              if(!allowed[child.nodeName]){
+                replacement=document.createTextNode(child.textContent||'');
+                node.replaceChild(replacement,child);
+              } else {
+                while(child.attributes&&child.attributes.length) child.removeAttribute(child.attributes[0].name);
+                clean(child);
+              }
+            } else if(child.nodeType!==3){
+              node.removeChild(child);
+            }
+            child=next;
+          }
+        }
+        clean(root);
+        if(!s(root.textContent||root.innerText||'')) return '';
+        return s(root.innerHTML);
+      }
       function chapterLabelText(row){ var completed=completeChapterParts(row&&row['Chapter'],row&&row['Chapter Description']); return completed.chapterDesc?(completed.chapter+' - '+completed.chapterDesc):completed.chapter; }
       function rowChapterDescriptionView(row){ return s(row&&row['Chapter Description'])||chapterDescriptionForCode(row&&row['Chapter']); }
       function supervisorReferenceForRow(row){
@@ -2094,14 +2134,15 @@
         if(field==='Date') return workbookSavedDateValue(row);
         if(field==='Chapter Description') return workbookSavedChapterDescriptionValue(row);
         if(field==='Approval Name'||field==='Approval stamp'||field==='Aprroval Licence No.') return workbookSavedSupervisorFieldValue(row,field);
+        if(field===MANUAL_DETAIL_FIELD) return sanitizeManualDetailHtml(row&&row[MANUAL_DETAIL_FIELD]);
         return s(row&&row[field]);
       }
-      function normalizeLoadedRow(row){ var rawDate=s(row&&row['Date']); row['Date']=formatDateDisplay(rawDate); row['Flags']=serializeFlagSelection(row&&row['Flags']); row[SUPERVISOR_ID_FIELD]=s(row&&row[SUPERVISOR_ID_FIELD]); row.__manualChapterDescription=!!s(row&&row['Chapter Description']); row.__manualApprovalName=!!s(row&&row['Approval Name']); row.__manualApprovalStamp=!!s(row&&row['Approval stamp']); row.__manualApprovalLicenceNo=!!s(row&&row['Aprroval Licence No.']); row.__rawDate=rawDate; row.__dateDirty=false; return row; }
+      function normalizeLoadedRow(row){ var rawDate=s(row&&row['Date']); row['Date']=formatDateDisplay(rawDate); row[MANUAL_DETAIL_FIELD]=sanitizeManualDetailHtml(row&&row[MANUAL_DETAIL_FIELD]); row['Flags']=serializeFlagSelection(row&&row['Flags']); row[SUPERVISOR_ID_FIELD]=s(row&&row[SUPERVISOR_ID_FIELD]); row.__manualChapterDescription=!!s(row&&row['Chapter Description']); row.__manualApprovalName=!!s(row&&row['Approval Name']); row.__manualApprovalStamp=!!s(row&&row['Approval stamp']); row.__manualApprovalLicenceNo=!!s(row&&row['Aprroval Licence No.']); row.__rawDate=rawDate; row.__dateDirty=false; return row; }
       function clearWorkbookState(){ rows=normalizeRows([]); AIRCRAFT_GROUP_ROWS=[]; AIRCRAFT_MAP=Object.create(null); CHAPTER_OPTIONS=defaultChapterOptions(); FLAG_RECORDS=defaultFlagRecords(); LOG_OWNER_INFO={ name:'', signature:'', stamp:'' }; APP_VIEW_SETTINGS=cloneAppViewSettings(DEFAULT_APP_VIEW_SETTINGS); syncPageFontSettings(); rebuildSupervisorState([]); activeFilters=emptyFilterState(); draftFilters=emptyFilterState(); applySearchQuery(''); markSharedDatalistsDirty(); settingsDirty=false; resetSavedLogbookState(); syncMindMapButtonVisibility(); }
 
       // ---- Row model ----
-      function emptyLogRow(type, chapter, chapterDesc){ return {__rowId:nextRowId(),'Aircraft Type':s(type),'A/C Reg':'','Chapter':s(chapter),'Chapter Description':s(chapterDesc),'Date':'','Job No':'','FAULT':'','Task Detail':'','Rewriten for cap741':'','Flags':'',[SUPERVISOR_ID_FIELD]:'','Approval Name':'','Approval stamp':'','Aprroval Licence No.':'','Signed':'',__manualChapterDescription:false,__manualApprovalName:false,__manualApprovalStamp:false,__manualApprovalLicenceNo:false,__trackedComparablePresent:false}; }
-      function rowHasEntryContent(row){ return !!(s(row['Date'])||s(row['A/C Reg'])||s(row['Job No'])||s(row['FAULT'])||s(row['Task Detail'])||s(row['Rewriten for cap741'])||s(row['Flags'])||s(row[SUPERVISOR_ID_FIELD])||s(row['Approval Name'])||s(row['Approval stamp'])||s(row['Aprroval Licence No.'])); }
+      function emptyLogRow(type, chapter, chapterDesc){ return {__rowId:nextRowId(),'Aircraft Type':s(type),'A/C Reg':'','Chapter':s(chapter),'Chapter Description':s(chapterDesc),'Date':'','Job No':'','FAULT':'','Task Detail':'','Rewriten for cap741':'',[MANUAL_DETAIL_FIELD]:'','Flags':'',[SUPERVISOR_ID_FIELD]:'','Approval Name':'','Approval stamp':'','Aprroval Licence No.':'','Signed':'',__manualChapterDescription:false,__manualApprovalName:false,__manualApprovalStamp:false,__manualApprovalLicenceNo:false,__trackedComparablePresent:false}; }
+      function rowHasEntryContent(row){ return !!(s(row['Date'])||s(row['A/C Reg'])||s(row['Job No'])||s(row['FAULT'])||s(row['Task Detail'])||s(row['Rewriten for cap741'])||manualDetailPlainText(row[MANUAL_DETAIL_FIELD])||s(row['Flags'])||s(row[SUPERVISOR_ID_FIELD])||s(row['Approval Name'])||s(row['Approval stamp'])||s(row['Aprroval Licence No.'])); }
       function rowHasWorkbookContent(row){ return !!(rowHasEntryContent(row)||s(row['Aircraft Type'])||s(row['Chapter'])||s(row['Chapter Description'])); }
       function nonEmptyRows(list){ var out=[]; for(var i=0;i<(list||[]).length;i++){ if(rowHasEntryContent(list[i]||{})) out.push(list[i]); } return out; }
       function workbookContentRows(list){ var out=[]; for(var i=0;i<(list||[]).length;i++){ if(rowHasWorkbookContent(list[i]||{})) out.push(list[i]); } return out; }
@@ -2779,7 +2820,7 @@
       function manualPageToLogRows(page){
         var heads=page.heads||{},chapterInfo=completeChapterParts(parseChapterValue(heads.chapter).chapter,parseChapterValue(heads.chapter).chapterDesc),out=[];
         for(var i=0;i<(page.rows||[]).length;i++){
-          var item=page.rows[i],supervisorRecord=supervisorRecordFor(item.supName)||{},row={'Aircraft Type':s(heads.type)||AIRCRAFT_MAP[s(item.reg).toUpperCase()]||'','A/C Reg':s(item.reg).toUpperCase(),'Chapter':chapterInfo.chapter,'Chapter Description':referenceOnlySaveEnabled()?'':chapterInfo.chapterDesc,'Date':formatDateDisplay(item.date),'Job No':s(item.job),'FAULT':'','Task Detail':s(item.task),'Rewriten for cap741':s(item.task),'Flags':'',[SUPERVISOR_ID_FIELD]:'','Approval Name':s(item.supName),'Approval stamp':s(item.supStamp)||s(supervisorRecord.stamp)||'','Aprroval Licence No.':s(item.supLicence)||(!referenceOnlySaveEnabled()?s(supervisorRecord.licence):'')};
+          var item=page.rows[i],supervisorRecord=supervisorRecordFor(item.supName)||{},row={'Aircraft Type':s(heads.type)||AIRCRAFT_MAP[s(item.reg).toUpperCase()]||'','A/C Reg':s(item.reg).toUpperCase(),'Chapter':chapterInfo.chapter,'Chapter Description':referenceOnlySaveEnabled()?'':chapterInfo.chapterDesc,'Date':formatDateDisplay(item.date),'Job No':s(item.job),'FAULT':'','Task Detail':s(item.task),'Rewriten for cap741':s(item.task),[MANUAL_DETAIL_FIELD]:'','Flags':'',[SUPERVISOR_ID_FIELD]:'','Approval Name':s(item.supName),'Approval stamp':s(item.supStamp)||s(supervisorRecord.stamp)||'','Aprroval Licence No.':s(item.supLicence)||(!referenceOnlySaveEnabled()?s(supervisorRecord.licence):'')};
           applyRowReferenceData(row);
           out.push(row);
         }
@@ -2860,10 +2901,21 @@
       // ---- Task detail modal ----
       function openInfoModal(){ if(infoModal) infoModal.className='modal-backdrop open'; }
       function closeInfoModal(){ if(infoModal) infoModal.className='modal-backdrop'; }
-      function taskDetailStateFromRow(row){ return { chapter:s(row['Chapter']), chapterDesc:s(row['Chapter Description']), fault:s(row['FAULT']), task:s(row['Task Detail']), rewrite:s(row['Rewriten for cap741']), flags:s(row['Flags']) }; }
-      function restoreTaskDetailState(row, state){ if(!row||!state) return; row['Chapter']=state.chapter; row['Chapter Description']=state.chapterDesc; row['FAULT']=state.fault; row['Task Detail']=state.task; row['Rewriten for cap741']=state.rewrite; row['Flags']=serializeFlagSelection(state.flags); }
+      function setManualDetailEditorHtml(value){ if(detailManualEl) detailManualEl.innerHTML=sanitizeManualDetailHtml(value); }
+      function readManualDetailEditorHtml(){ return detailManualEl?sanitizeManualDetailHtml(detailManualEl.innerHTML):''; }
+      function runManualDetailCommand(command){
+        command=s(command);
+        if(!command||!detailManualEl) return;
+        detailManualEl.focus();
+        try { document.execCommand('styleWithCSS',false,false); } catch(e){}
+        try { document.execCommand(command,false,null); } catch(e){}
+        setManualDetailEditorHtml(detailManualEl.innerHTML);
+        previewTaskDetailForm();
+      }
+      function taskDetailStateFromRow(row){ return { chapter:s(row['Chapter']), chapterDesc:s(row['Chapter Description']), fault:s(row['FAULT']), task:s(row['Task Detail']), rewrite:s(row['Rewriten for cap741']), manual:s(row[MANUAL_DETAIL_FIELD]), flags:s(row['Flags']) }; }
+      function restoreTaskDetailState(row, state){ if(!row||!state) return; row['Chapter']=state.chapter; row['Chapter Description']=state.chapterDesc; row['FAULT']=state.fault; row['Task Detail']=state.task; row['Rewriten for cap741']=state.rewrite; row[MANUAL_DETAIL_FIELD]=sanitizeManualDetailHtml(state.manual); row['Flags']=serializeFlagSelection(state.flags); }
       function previewTaskDetailForm(){ var row=rowById(lastTaskDetailRowId); if(!row) return; applyTaskDetailForm(row,readTaskDetailForm()); updateRowDirtyState(row); refreshUnsavedChangesState(); }
-      function openTaskDetail(rowId){ lastTaskDetailFocus=document.activeElement&&pagesEl.contains(document.activeElement)?document.activeElement:null; captureActiveEditorState(); var row=rowById(rowId); if(!row) return; lastTaskDetailRowId=rowId; taskDetailOriginalState=taskDetailStateFromRow(row); taskDetailRewriteDirty=false; detailChapterEl.value=chapterLabelText(row); detailFaultEl.value=s(row['FAULT']); detailTaskEl.value=s(row['Task Detail']); detailRewriteEl.value=s(row['Rewriten for cap741']||row['Task Detail']); renderTaskDetailFlagOptions(rowFlagLabels(row)); taskDetailModal.className='modal-backdrop open'; if(typeof requestAnimationFrame==='function') requestAnimationFrame(autoSizeDetailTextareas); else autoSizeDetailTextareas(); }
+      function openTaskDetail(rowId){ lastTaskDetailFocus=document.activeElement&&pagesEl.contains(document.activeElement)?document.activeElement:null; captureActiveEditorState(); var row=rowById(rowId); if(!row) return; lastTaskDetailRowId=rowId; taskDetailOriginalState=taskDetailStateFromRow(row); taskDetailRewriteDirty=false; detailChapterEl.value=chapterLabelText(row); detailFaultEl.value=s(row['FAULT']); detailTaskEl.value=s(row['Task Detail']); detailRewriteEl.value=s(row['Rewriten for cap741']||row['Task Detail']); setManualDetailEditorHtml(row[MANUAL_DETAIL_FIELD]); renderTaskDetailFlagOptions(rowFlagLabels(row)); taskDetailModal.className='modal-backdrop open'; if(typeof requestAnimationFrame==='function') requestAnimationFrame(autoSizeDetailTextareas); else autoSizeDetailTextareas(); }
       function showConfirmDialog(title, text, okLabel){ return new Promise(function(resolve){ confirmResolver=resolve; if(confirmTitleEl) confirmTitleEl.textContent=title||'Confirm'; if(confirmTextEl) confirmTextEl.textContent=text||'Are you sure?'; if(confirmOkBtn) confirmOkBtn.textContent=okLabel||'Confirm'; if(confirmModal) confirmModal.className='modal-backdrop open'; }); }
       function closeConfirmDialog(result){ if(confirmModal) confirmModal.className='modal-backdrop'; if(confirmResolver){ var resolve=confirmResolver; confirmResolver=null; resolve(!!result); } }
       function readTaskDetailForm(){
@@ -2872,6 +2924,7 @@
           fault:s(detailFaultEl.value),
           task:s(detailTaskEl.value),
           rewrite:s(detailRewriteEl.value),
+          manual:readManualDetailEditorHtml(),
           flags:readTaskDetailSelectedFlags()
         };
       }
@@ -2880,6 +2933,7 @@
         row['FAULT']=form.fault;
         row['Task Detail']=form.task;
         row['Rewriten for cap741']=form.rewrite||form.task;
+        row[MANUAL_DETAIL_FIELD]=sanitizeManualDetailHtml(form.manual);
         setRowFlags(row,form.flags);
         if(parsedChapter.chapter){
           row['Chapter']=parsedChapter.chapter;
@@ -3469,6 +3523,7 @@
           for(var i=0;i<logRows.length;i++){
             var row={};
             for(var j=0;j<LOG_HEADERS.length;j++) row[LOG_HEADERS[j]]=s(logRows[i][LOG_HEADERS[j]]);
+            row[MANUAL_DETAIL_FIELD]=s(logRows[i][MANUAL_DETAIL_FIELD]||logRows[i]['Manual detail']||logRows[i]['Manual Detal']||logRows[i]['Manual detal']||row[MANUAL_DETAIL_FIELD]);
             row[SUPERVISOR_ID_FIELD]=s(logRows[i][SUPERVISOR_ID_FIELD]||logRows[i]['Approval ID']||logRows[i]['ID']||row[SUPERVISOR_ID_FIELD]);
             row.__signedSlot=(function(value){ var slot=parseInt(s(value),10); return isFinite(slot)&&slot>=0?slot:-1; })(logRows[i]['Signed Slot']);
             parsed.push(normalizeLoadedRow(row));
@@ -3579,6 +3634,7 @@
           'FAULT':'',
           'Task Detail':NEW_WORKBOOK_TASK_TEXT,
           'Rewriten for cap741':NEW_WORKBOOK_TASK_TEXT,
+          [MANUAL_DETAIL_FIELD]:'',
           [SUPERVISOR_ID_FIELD]:'1',
           'Approval Name':NEW_WORKBOOK_SUPERVISOR_NAME,
           'Approval stamp':NEW_WORKBOOK_SUPERVISOR_NAME,
@@ -3990,6 +4046,11 @@
       if(detailFaultEl) detailFaultEl.addEventListener('input',function(){ autoSizeDetailTextarea(detailFaultEl); previewTaskDetailForm(); });
       if(detailTaskEl) detailTaskEl.addEventListener('input',function(){ if(!taskDetailRewriteDirty) detailRewriteEl.value=detailTaskEl.value; autoSizeDetailTextarea(detailTaskEl); autoSizeDetailTextarea(detailRewriteEl); previewTaskDetailForm(); });
       if(detailRewriteEl) detailRewriteEl.addEventListener('input',function(){ taskDetailRewriteDirty=true; autoSizeDetailTextarea(detailRewriteEl); previewTaskDetailForm(); });
+      if(detailManualEl) detailManualEl.addEventListener('input',previewTaskDetailForm);
+      if(detailManualEl) detailManualEl.addEventListener('blur',function(){ setManualDetailEditorHtml(detailManualEl.innerHTML); });
+      if(detailManualEl) detailManualEl.addEventListener('paste',function(){ setTimeout(function(){ setManualDetailEditorHtml(detailManualEl.innerHTML); previewTaskDetailForm(); },0); });
+      if(taskDetailModal) taskDetailModal.addEventListener('mousedown',function(ev){ if(ev.target&&ev.target.closest&&ev.target.closest('[data-detail-rich-command]')) ev.preventDefault(); });
+      if(taskDetailModal) taskDetailModal.addEventListener('click',function(ev){ var richBtn=ev.target&&ev.target.closest&&ev.target.closest('[data-detail-rich-command]'); if(richBtn){ ev.preventDefault(); runManualDetailCommand(richBtn.getAttribute('data-detail-rich-command')); } });
       if(taskDetailModal) taskDetailModal.addEventListener('change',function(ev){ if(ev.target&&ev.target.matches&&ev.target.matches('[data-flag-option]')) previewTaskDetailForm(); });
       if(confirmCancelBtn) confirmCancelBtn.onclick=function(){ closeConfirmDialog(false); };
       if(confirmOkBtn) confirmOkBtn.onclick=function(){ closeConfirmDialog(true); };
