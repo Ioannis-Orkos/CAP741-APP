@@ -54,7 +54,7 @@
       var SUPERVISOR_ID_FIELD = 'Supervisor ID';
       var MANUAL_DETAIL_FIELD = 'Manual Detail';
       var LOG_HEADERS = ['Aircraft Type','A/C Reg','Chapter','Chapter Description','Date','Job No','FAULT','Task Detail','Rewriten for cap741',MANUAL_DETAIL_FIELD,'Flags',SUPERVISOR_ID_FIELD,'Approval Name','Approval stamp','Aprroval Licence No.','Signed'];
-      var AI_PROMPT_FIELDS = ['Aircraft Type','A/C Reg','Chapter','Chapter Description','Date','Job No','FAULT','Task Detail','Rewriten for cap741'];
+      var AI_PROMPT_FIELDS = ['Aircraft Type','A/C Reg','Chapter','Chapter Description','Date','Job No','FAULT','Task Detail','Rewriten for cap741',MANUAL_DETAIL_FIELD];
       var DATE_PLACEHOLDER = 'dd/MMM/yyyy';
       var FILTER_KEYS = ['aircraftType','aircraftReg','supervisor','chapter'];
       var STORAGE_SOURCE_NONE = 'none';
@@ -2984,32 +2984,44 @@
           'FAULT': s(form.fault||row['FAULT']),
           'Task Detail': s(form.task||row['Task Detail']),
           'Rewriten for cap741': s(form.rewrite||row['Rewriten for cap741']||form.task||row['Task Detail']),
+          [MANUAL_DETAIL_FIELD]: manualDetailPlainText(form.manual||row[MANUAL_DETAIL_FIELD]),
           'Flags': serializeFlagSelection(form.flags||rowFlagLabels(row))
         };
       }
+      function aiPromptSectionTitle(title){
+        return title+'\n'+Array(title.length+1).join('-');
+      }
+      function aiPromptFieldText(field, value){
+        value=s(value);
+        if(value.indexOf('\n')===-1) return field+': '+value;
+        return field+':\n'+value;
+      }
       function aiPromptFlagsListText(){
-        var flags=flagWorkbookRows();
+        var flags=flagWorkbookRows(),primary=[],more=[];
         if(!flags.length) return 'No flags configured.';
-        return flags.map(function(flag){
+        for(var i=0;i<flags.length;i++){
+          var flag=flags[i];
           var parts=['- '+s(flag.Flag)];
           if(s(flag.Section)) parts.push('Section: '+s(flag.Section));
           if(s(flag.Color)) parts.push('Color: '+s(flag.Color));
-          return parts.join(' | ');
-        }).join('\n');
+          if(normalizeFlagSection(flag.Section)===FLAG_SECTION_MORE) more.push(parts.join(' | '));
+          else primary.push(parts.join(' | '));
+        }
+        return 'Primary Flags\n'+(primary.join('\n')||'- None')+'\n\nMore Flags\n'+(more.join('\n')||'- None');
       }
       function buildTaskDetailAiPromptText(row){
         var form=readTaskDetailForm(),values=aiPromptRowValues(row,form),lines=[],prompt=s(APP_VIEW_SETTINGS.aiPromptText);
         if(prompt) lines.push(prompt);
-        if(lines.length) lines.push('');
-        lines.push('Logbook Entry');
+        lines.push('');
+        lines.push(aiPromptSectionTitle('Flags Sheet Options'));
+        lines.push(aiPromptFlagsListText());
+        lines.push('');
+        lines.push(aiPromptSectionTitle('Current Logbook Row'));
         for(var i=0;i<AI_PROMPT_FIELDS.length;i++){
           var field=AI_PROMPT_FIELDS[i];
-          lines.push(field+': '+s(values[field]));
+          lines.push(aiPromptFieldText(field,s(values[field])));
         }
-        lines.push('Selected Flags: '+(s(values.Flags)||'None'));
-        lines.push('');
-        lines.push('Flags Sheet Options');
-        lines.push(aiPromptFlagsListText());
+        lines.push(aiPromptFieldText('Selected Flags',s(values.Flags)||'None'));
         return lines.join('\n');
       }
       async function copyTaskDetailAiPrompt(){
