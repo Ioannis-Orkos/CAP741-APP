@@ -1497,8 +1497,8 @@
       function supervisorNameView(row){ var record=supervisorReferenceForRow(row); return s(row&&row['Approval Name'])||s(record&&record.name); }
       function supervisorStampView(row){ var record=supervisorReferenceForRow(row); return s(row&&row['Approval stamp'])||s(record&&record.stamp); }
       function supervisorLicenceView(row){ var record=supervisorReferenceForRow(row); return s(row&&row['Aprroval Licence No.'])||s(record&&record.licence); }
-      function fieldAffectsRowLayout(field){ return field==='Task Detail'||field==='Rewriten for cap741'||field==='Approval Name'||field==='Aprroval Licence No.'; }
-      function fieldNeedsLiveLayoutRefresh(field){ return field==='Task Detail'||field==='Rewriten for cap741'||field==='Approval Name'||field==='Aprroval Licence No.'; }
+      function fieldAffectsRowLayout(field){ return field==='Task Detail'||field==='Rewriten for cap741'; }
+      function fieldNeedsLiveLayoutRefresh(field){ return field==='Task Detail'||field==='Rewriten for cap741'; }
       function liveLayoutUnitsForField(row, field){
         if(!row||!(field==='Task Detail'||field==='Rewriten for cap741')) return 0;
         return unitsFor(row);
@@ -2428,9 +2428,10 @@
         input.style.setProperty('--dots-input-font-size',fontSize+'px');
       }
       function syncFieldInputViewState(input){
-        var wrap=input&&input.parentElement;
+        var wrap=input&&input.parentElement,view=input&&input.nextElementSibling;
         if(!wrap||!wrap.classList||!wrap.classList.contains('field-input-view-wrap')) return;
         wrap.classList.toggle('has-input-value',!!s(valueOf(input)));
+        wrap.classList.toggle('has-view-value',!!s(view&&view.textContent));
       }
       function editableTextInput(field, rowId, value, placeholder, extraClass, listId){ return '<input class="field-input '+(extraClass||'')+'" type="text"'+(listId?' list="'+listId+'"':'')+' data-row-id="'+rowId+'" data-edit-field="'+field+'" value="'+esc(value||'')+'"'+(placeholder?' placeholder="'+esc(placeholder)+'"':'')+'>';}
       function editableTextInputWithView(field, rowId, value, placeholder, extraClass, listId, viewValue){
@@ -2620,7 +2621,11 @@
         return pages.filter(Boolean);
       }
       function blankEditableCell(field, type, chapter, chapterDesc, groupLabel, regListId, filterReg){ var common=' data-new-row="1" data-edit-field="'+field+'" data-new-type="'+esc(type)+'" data-new-chapter="'+esc(chapter)+'" data-new-chapter-desc="'+esc(chapterDesc||'')+'" data-new-page-group="'+esc(groupLabel||'')+'" data-new-filter-reg="'+esc(filterReg||'')+'"'; if(field==='Date') return dateControlHtml(common,DATE_PLACEHOLDER); if(field==='A/C Reg') return '<input class="field-input" type="text" list="'+esc(regListId||'aircraft-reg-list')+'" placeholder="G-XXXX"'+common+'>'; if(field==='Job No') return '<input class="field-input" type="text" placeholder="Job No"'+common+'>'; if(field==='Task Detail'||field==='Rewriten for cap741') return '<div class="editable-cell task-input" contenteditable="true"'+common+'></div>'; return '<div class="editable-cell" contenteditable="true"'+common+'></div>'; }
-      function blankSupervisorCell(type, chapter, chapterDesc, groupLabel, filterReg){ return '<div class="sup"><span class="star">*</span><input class="field-input name" type="text" list="supervisor-list" placeholder="Supervisor" data-new-row="1" data-edit-field="Approval Name" data-new-type="'+esc(type)+'" data-new-chapter="'+esc(chapter)+'" data-new-chapter-desc="'+esc(chapterDesc||'')+'" data-new-page-group="'+esc(groupLabel||'')+'" data-new-filter-reg="'+esc(filterReg||'')+'"><input class="field-input licence" type="text" placeholder="Licence number" data-new-row="1" data-edit-field="Aprroval Licence No." data-new-type="'+esc(type)+'" data-new-chapter="'+esc(chapter)+'" data-new-chapter-desc="'+esc(chapterDesc||'')+'" data-new-page-group="'+esc(groupLabel||'')+'" data-new-filter-reg="'+esc(filterReg||'')+'"></div>'; }
+      function blankSupervisorInputWithView(field, type, chapter, chapterDesc, groupLabel, filterReg, placeholder, extraClass, listId){
+        var attrs=' data-new-row="1" data-edit-field="'+field+'" data-new-type="'+esc(type)+'" data-new-chapter="'+esc(chapter)+'" data-new-chapter-desc="'+esc(chapterDesc||'')+'" data-new-page-group="'+esc(groupLabel||'')+'" data-new-filter-reg="'+esc(filterReg||'')+'"';
+        return '<span class="field-input-view-wrap '+esc(extraClass||'')+'"><input class="field-input ref-view-input" type="text"'+(listId?' list="'+listId+'"':'')+' placeholder="'+esc(placeholder||'')+'"'+attrs+'><span class="field-input-view" aria-hidden="true"></span></span>';
+      }
+      function blankSupervisorCell(type, chapter, chapterDesc, groupLabel, filterReg){ return '<div class="sup"><span class="star">*</span>'+blankSupervisorInputWithView('Approval Name',type,chapter,chapterDesc,groupLabel,filterReg,'Supervisor','name','supervisor-list')+blankSupervisorInputWithView('Aprroval Licence No.',type,chapter,chapterDesc,groupLabel,filterReg,'Licence number','licence','')+'</div>'; }
       function makeBlankSlot(group, regListId, preserveOnly){ if(preserveOnly) return '<tr class="slot slot-placeholder"><td class="c-date">'+placeholderCellHtml('placeholder-cell')+'</td><td class="c-reg">'+placeholderCellHtml('placeholder-cell')+'</td><td class="c-job">'+placeholderCellHtml('placeholder-cell')+'</td><td class="c-task">'+placeholderCellHtml('placeholder-cell')+'</td><td class="c-sup">'+placeholderCellHtml('placeholder-cell')+'</td></tr>'; var newType=s(group&&group.defaultNewType),groupLabel=group&&group.mode===PAGE_GROUPING_GROUP?s(group.groupLabel):'',filterReg=currentSingleAircraftRegFilter(); return '<tr class="slot"><td class="c-date">'+blankEditableCell('Date',newType,group.chapter,group.chapterDesc,groupLabel,regListId,filterReg)+'</td><td class="c-reg">'+blankEditableCell('A/C Reg',newType,group.chapter,group.chapterDesc,groupLabel,regListId,filterReg)+'</td><td class="c-job">'+blankEditableCell('Job No',newType,group.chapter,group.chapterDesc,groupLabel,regListId,filterReg)+'</td><td class="c-task">'+blankTaskCellHtml(newType,group.chapter,group.chapterDesc,groupLabel,regListId,filterReg)+'</td><td class="c-sup">'+blankSupervisorCell(newType,group.chapter,group.chapterDesc,groupLabel,filterReg)+'</td></tr>'; }
       function makeRows(items, group, preserveOnly){
         var html='',consumed=0,regListId=aircraftRegListIdForGroup(group);
