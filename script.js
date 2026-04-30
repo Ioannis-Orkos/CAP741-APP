@@ -30,8 +30,8 @@
       var PAGE_GROUPING_GROUP = 'group';
       var FLAG_SECTION_PRIMARY = 'Primary';
       var FLAG_SECTION_MORE = 'More';
-      var DEFAULT_APP_VIEW_SETTINGS = { showMindMap: false, pageGrouping: PAGE_GROUPING_TYPE, referenceOnlySave: true };
-      var APP_VIEW_SETTINGS = { showMindMap: DEFAULT_APP_VIEW_SETTINGS.showMindMap, pageGrouping: DEFAULT_APP_VIEW_SETTINGS.pageGrouping, referenceOnlySave: DEFAULT_APP_VIEW_SETTINGS.referenceOnlySave };
+      var DEFAULT_APP_VIEW_SETTINGS = { showMindMap: false, pageGrouping: PAGE_GROUPING_TYPE, referenceOnlySave: true, dotsFontSize: 13, tableFontSize: 9, ownerFontSize: 13 };
+      var APP_VIEW_SETTINGS = cloneAppViewSettings(DEFAULT_APP_VIEW_SETTINGS);
       var SUPERVISOR_OPTIONS = [];
       var SUPERVISOR_LOOKUP = Object.create(null);
       var AIRCRAFT_GROUP_ROWS = [];
@@ -1770,8 +1770,16 @@
         return {
           showMindMap: settings.showMindMap!==false,
           pageGrouping: normalizePageGrouping(settings.pageGrouping||DEFAULT_APP_VIEW_SETTINGS.pageGrouping),
-          referenceOnlySave: boolSettingValue(settings.referenceOnlySave,DEFAULT_APP_VIEW_SETTINGS.referenceOnlySave)
+          referenceOnlySave: boolSettingValue(settings.referenceOnlySave,DEFAULT_APP_VIEW_SETTINGS.referenceOnlySave),
+          dotsFontSize: fontSizeSettingValue(settings.dotsFontSize,DEFAULT_APP_VIEW_SETTINGS.dotsFontSize),
+          tableFontSize: fontSizeSettingValue(settings.tableFontSize,DEFAULT_APP_VIEW_SETTINGS.tableFontSize),
+          ownerFontSize: fontSizeSettingValue(settings.ownerFontSize,DEFAULT_APP_VIEW_SETTINGS.ownerFontSize)
         };
+      }
+      function fontSizeSettingValue(value, fallback){
+        var num=Number(s(value).replace(/px$/i,''));
+        if(!isFinite(num)||num<6||num>24) num=Number(fallback);
+        return Math.round(num*10)/10;
       }
       function boolSettingValue(value, fallback){
         var raw=normalizedText(value);
@@ -1782,6 +1790,16 @@
       }
       function currentPageGrouping(){ return normalizePageGrouping(APP_VIEW_SETTINGS.pageGrouping); }
       function referenceOnlySaveEnabled(){ return APP_VIEW_SETTINGS.referenceOnlySave!==false; }
+      function applyPageFontSettings(settings){
+        settings=cloneAppViewSettings(settings||APP_VIEW_SETTINGS);
+        var root=document.documentElement;
+        if(!root||!root.style) return;
+        taskTextMeasureCache=null;
+        root.style.setProperty('--cap741-dots-font-size',fontSizeSettingValue(settings.dotsFontSize,DEFAULT_APP_VIEW_SETTINGS.dotsFontSize)+'px');
+        root.style.setProperty('--cap741-table-font-size',fontSizeSettingValue(settings.tableFontSize,DEFAULT_APP_VIEW_SETTINGS.tableFontSize)+'px');
+        root.style.setProperty('--cap741-owner-font-size',fontSizeSettingValue(settings.ownerFontSize,DEFAULT_APP_VIEW_SETTINGS.ownerFontSize)+'px');
+      }
+      function syncPageFontSettings(){ applyPageFontSettings(APP_VIEW_SETTINGS); }
       function pageGroupingDisplayLabel(value){ return normalizePageGrouping(value)===PAGE_GROUPING_GROUP ? 'Aircraft Group' : 'Aircraft Type'; }
       function syncMindMapButtonVisibility(){
         var hidden=APP_VIEW_SETTINGS.showMindMap===false;
@@ -1795,7 +1813,10 @@
           {Key:'Stamp',Value:s(LOG_OWNER_INFO.stamp)},
           {Key:'Show Mind Map',Value:APP_VIEW_SETTINGS.showMindMap?'true':'false'},
           {Key:'Page Grouping',Value:currentPageGrouping()},
-          {Key:'Reference Save',Value:referenceOnlySaveEnabled()?'true':'false'}
+          {Key:'Reference Save',Value:referenceOnlySaveEnabled()?'true':'false'},
+          {Key:'Dots Font Size',Value:fontSizeSettingValue(APP_VIEW_SETTINGS.dotsFontSize,DEFAULT_APP_VIEW_SETTINGS.dotsFontSize)},
+          {Key:'Table Font Size',Value:fontSizeSettingValue(APP_VIEW_SETTINGS.tableFontSize,DEFAULT_APP_VIEW_SETTINGS.tableFontSize)},
+          {Key:'Owner Font Size',Value:fontSizeSettingValue(APP_VIEW_SETTINGS.ownerFontSize,DEFAULT_APP_VIEW_SETTINGS.ownerFontSize)}
         ];
       }
       function cloneFlagRecords(records){
@@ -2076,7 +2097,7 @@
         return s(row&&row[field]);
       }
       function normalizeLoadedRow(row){ var rawDate=s(row&&row['Date']); row['Date']=formatDateDisplay(rawDate); row['Flags']=serializeFlagSelection(row&&row['Flags']); row[SUPERVISOR_ID_FIELD]=s(row&&row[SUPERVISOR_ID_FIELD]); row.__manualChapterDescription=!!s(row&&row['Chapter Description']); row.__manualApprovalName=!!s(row&&row['Approval Name']); row.__manualApprovalStamp=!!s(row&&row['Approval stamp']); row.__manualApprovalLicenceNo=!!s(row&&row['Aprroval Licence No.']); row.__rawDate=rawDate; row.__dateDirty=false; return row; }
-      function clearWorkbookState(){ rows=normalizeRows([]); AIRCRAFT_GROUP_ROWS=[]; AIRCRAFT_MAP=Object.create(null); CHAPTER_OPTIONS=defaultChapterOptions(); FLAG_RECORDS=defaultFlagRecords(); LOG_OWNER_INFO={ name:'', signature:'', stamp:'' }; APP_VIEW_SETTINGS=cloneAppViewSettings(DEFAULT_APP_VIEW_SETTINGS); rebuildSupervisorState([]); activeFilters=emptyFilterState(); draftFilters=emptyFilterState(); applySearchQuery(''); markSharedDatalistsDirty(); settingsDirty=false; resetSavedLogbookState(); syncMindMapButtonVisibility(); }
+      function clearWorkbookState(){ rows=normalizeRows([]); AIRCRAFT_GROUP_ROWS=[]; AIRCRAFT_MAP=Object.create(null); CHAPTER_OPTIONS=defaultChapterOptions(); FLAG_RECORDS=defaultFlagRecords(); LOG_OWNER_INFO={ name:'', signature:'', stamp:'' }; APP_VIEW_SETTINGS=cloneAppViewSettings(DEFAULT_APP_VIEW_SETTINGS); syncPageFontSettings(); rebuildSupervisorState([]); activeFilters=emptyFilterState(); draftFilters=emptyFilterState(); applySearchQuery(''); markSharedDatalistsDirty(); settingsDirty=false; resetSavedLogbookState(); syncMindMapButtonVisibility(); }
 
       // ---- Row model ----
       function emptyLogRow(type, chapter, chapterDesc){ return {__rowId:nextRowId(),'Aircraft Type':s(type),'A/C Reg':'','Chapter':s(chapter),'Chapter Description':s(chapterDesc),'Date':'','Job No':'','FAULT':'','Task Detail':'','Rewriten for cap741':'','Flags':'',[SUPERVISOR_ID_FIELD]:'','Approval Name':'','Approval stamp':'','Aprroval Licence No.':'','Signed':'',__manualChapterDescription:false,__manualApprovalName:false,__manualApprovalStamp:false,__manualApprovalLicenceNo:false,__trackedComparablePresent:false}; }
@@ -2314,9 +2335,19 @@
       // ---- Render helpers ----
       function mainPageTaskText(row){ return s(row['Rewriten for cap741']||row['Task Detail']); }
       function taskTextMeasureSample(){ return pagesEl&&pagesEl.querySelector?pagesEl.querySelector('.sheet td.c-task .task-wrap .task > .editable-cell, .sheet td.c-task .task-wrap .task > .locked-cell'):null; }
+      function taskTextLineHeightPx(fontSize){
+        return Math.max(1,fontSizeSettingValue(fontSize,DEFAULT_APP_VIEW_SETTINGS.tableFontSize)*1.18);
+      }
+      function taskTextFontSizePx(){
+        if(window.getComputedStyle&&document&&document.documentElement){
+          var cssValue=window.getComputedStyle(document.documentElement).getPropertyValue('--cap741-table-font-size');
+          if(s(cssValue)) return fontSizeSettingValue(cssValue,DEFAULT_APP_VIEW_SETTINGS.tableFontSize);
+        }
+        return fontSizeSettingValue(APP_VIEW_SETTINGS.tableFontSize,DEFAULT_APP_VIEW_SETTINGS.tableFontSize);
+      }
       function taskTextMeasureMetrics(){
         if(taskTextMeasureCache) return taskTextMeasureCache;
-        var sample=taskTextMeasureSample(),width=TASK_TEXT_MEASURE_WIDTH_FALLBACK_PX,lineHeight=TASK_TEXT_LINE_HEIGHT_FALLBACK_PX,fontFamily='Arial, Helvetica, sans-serif',fontSize='8px',fontWeight='400',fontStyle='normal',fontVariant='normal',letterSpacing='normal';
+        var sample=taskTextMeasureSample(),settingsFontSize=taskTextFontSizePx(),width=TASK_TEXT_MEASURE_WIDTH_FALLBACK_PX,lineHeight=taskTextLineHeightPx(settingsFontSize),fontFamily='Arial, Helvetica, sans-serif',fontSize=settingsFontSize+'px',fontWeight='400',fontStyle='normal',fontVariant='normal',letterSpacing='normal';
         if(sample&&window.getComputedStyle){
           var computed=window.getComputedStyle(sample),sampleRect=sample.getBoundingClientRect();
           width=(sampleRect&&sampleRect.width)||sample.clientWidth||width;
@@ -2632,7 +2663,7 @@
         for(var i=0;i<items.length;i++){
           var item=items[i],row=item.row,signed=isRowSigned(row);
           while(consumed<item.pageSlotStart){ html+=makeBlankSlot(group,regListId,preserveOnly); consumed++; }
-          html+='<tr class="slot'+(item.units>1?' merged-slot':'')+(signed?' signed-row':'')+'" data-row-key="row-'+row.__rowId+'" data-slot-start="'+item.slotStart+'" style="height:calc(var(--slot-h) * '+item.units+')"><td class="c-date">'+dateCellHtml(row)+'</td><td class="c-reg">'+(signed?staticTextCell(row['A/C Reg'],'locked-cell'):editableTextInput('A/C Reg',row.__rowId,row['A/C Reg'],'G-XXXX','',regListId))+'</td><td class="c-job">'+(signed?staticTextCell(row['Job No'],'locked-cell'):editableTextInput('Job No',row.__rowId,row['Job No'],'Job No'))+'</td><td class="c-task">'+taskCellHtml(row)+'</td><td class="c-sup">'+editableSupervisorCell(row)+'</td></tr>';
+          html+='<tr class="slot'+(item.units>1?' merged-slot':'')+(signed?' signed-row':'')+'" data-row-key="row-'+row.__rowId+'" data-slot-start="'+item.slotStart+'" style="height:calc(var(--slot-h) * '+item.units+');--task-max-lines:'+(item.units*ROW_TASK_LINES_PER_SLOT)+'"><td class="c-date">'+dateCellHtml(row)+'</td><td class="c-reg">'+(signed?staticTextCell(row['A/C Reg'],'locked-cell'):editableTextInput('A/C Reg',row.__rowId,row['A/C Reg'],'G-XXXX','',regListId))+'</td><td class="c-job">'+(signed?staticTextCell(row['Job No'],'locked-cell'):editableTextInput('Job No',row.__rowId,row['Job No'],'Job No'))+'</td><td class="c-task">'+taskCellHtml(row)+'</td><td class="c-sup">'+editableSupervisorCell(row)+'</td></tr>';
           consumed=item.pageSlotStart+item.units;
         }
         for(var j=consumed;j<PAGE_SLOTS;j++) html+=makeBlankSlot(group,regListId,preserveOnly);
@@ -3463,7 +3494,11 @@
           if(key==='show mind map'||key==='show mindmap'||key==='mind map icon') APP_VIEW_SETTINGS.showMindMap=boolSettingValue(value,DEFAULT_APP_VIEW_SETTINGS.showMindMap);
           if(key==='page grouping'||key==='organize pages by'||key==='page grouping mode') APP_VIEW_SETTINGS.pageGrouping=normalizePageGrouping(value);
           if(key==='reference save'||key==='save reference values'||key==='reference-only save'||key==='reference only save') APP_VIEW_SETTINGS.referenceOnlySave=boolSettingValue(value,DEFAULT_APP_VIEW_SETTINGS.referenceOnlySave);
+          if(key==='dots font size'||key==='header font size'||key==='dots-row font size') APP_VIEW_SETTINGS.dotsFontSize=fontSizeSettingValue(value,DEFAULT_APP_VIEW_SETTINGS.dotsFontSize);
+          if(key==='table font size'||key==='table cell font size'||key==='sheet font size') APP_VIEW_SETTINGS.tableFontSize=fontSizeSettingValue(value,DEFAULT_APP_VIEW_SETTINGS.tableFontSize);
+          if(key==='owner font size'||key==='owner-row font size'||key==='footer owner font size') APP_VIEW_SETTINGS.ownerFontSize=fontSizeSettingValue(value,DEFAULT_APP_VIEW_SETTINGS.ownerFontSize);
         }
+        syncPageFontSettings();
         syncRowsToReferenceFillMode();
         markSharedDatalistsDirty();
         resetSavedLogbookState();
@@ -3556,6 +3591,7 @@
         FLAG_RECORDS=defaultFlagRecords();
         LOG_OWNER_INFO={ name:NEW_WORKBOOK_OWNER_NAME, signature:'', stamp:NEW_WORKBOOK_OWNER_NAME };
         APP_VIEW_SETTINGS=cloneAppViewSettings(DEFAULT_APP_VIEW_SETTINGS);
+        syncPageFontSettings();
         activeFilters=emptyFilterState();
         draftFilters=emptyFilterState();
         applySearchQuery('');
@@ -3694,10 +3730,16 @@
         var mindMapToggle=settingsBodyEl&&settingsBodyEl.querySelector('#settingsShowMindMap');
         var referenceSaveToggle=settingsBodyEl&&settingsBodyEl.querySelector('#settingsReferenceOnlySave');
         var groupingChoice=settingsBodyEl&&settingsBodyEl.querySelector('input[name="settingsPageGrouping"]:checked');
+        var dotsFontInput=settingsBodyEl&&settingsBodyEl.querySelector('#settingsDotsFontSize');
+        var tableFontInput=settingsBodyEl&&settingsBodyEl.querySelector('#settingsTableFontSize');
+        var ownerFontInput=settingsBodyEl&&settingsBodyEl.querySelector('#settingsOwnerFontSize');
         return {
           showMindMap: !mindMapToggle || !!mindMapToggle.checked,
           pageGrouping: normalizePageGrouping(groupingChoice&&groupingChoice.value),
-          referenceOnlySave: !referenceSaveToggle || !referenceSaveToggle.checked
+          referenceOnlySave: !referenceSaveToggle || !referenceSaveToggle.checked,
+          dotsFontSize: fontSizeSettingValue(dotsFontInput&&dotsFontInput.value,APP_VIEW_SETTINGS.dotsFontSize),
+          tableFontSize: fontSizeSettingValue(tableFontInput&&tableFontInput.value,APP_VIEW_SETTINGS.tableFontSize),
+          ownerFontSize: fontSizeSettingValue(ownerFontInput&&ownerFontInput.value,APP_VIEW_SETTINGS.ownerFontSize)
         };
       }
       function syncSettingsPageGroupingUi(){
@@ -3711,6 +3753,12 @@
         currentEl=settingsBodyEl.querySelector('[data-settings-page-grouping-current]');
         if(currentEl) currentEl.textContent='Selected: '+pageGroupingDisplayLabel(selected);
       }
+      function settingsFontSizeInputHtml(id, label, value){
+        return '<div class="settings-font-field"><label for="'+id+'">'+label+'</label><input class="settings-font-input" id="'+id+'" data-font-size-setting="1" type="number" min="6" max="24" step="0.5" value="'+esc(fontSizeSettingValue(value,12))+'"></div>';
+      }
+      function settingsFontCardHtml(){
+        return '<div class="settings-font-card"><div class="settings-view-card-head"><h3 class="settings-view-card-title">Page font sizes</h3><p class="settings-view-card-copy">Adjust the main CAP 741 page text sizes.</p></div><div class="settings-font-grid">'+settingsFontSizeInputHtml('settingsDotsFontSize','Header',APP_VIEW_SETTINGS.dotsFontSize)+settingsFontSizeInputHtml('settingsTableFontSize','Table',APP_VIEW_SETTINGS.tableFontSize)+settingsFontSizeInputHtml('settingsOwnerFontSize','Owner',APP_VIEW_SETTINGS.ownerFontSize)+'</div></div>';
+      }
       function renderSettingsBody(tab){
         settingsActiveTab=tab||'owner';
         var TABS=[{id:'owner',label:'Owner'},{id:'storage',label:'Storage'},{id:'aircraft',label:'Aircraft'},{id:'supervisors',label:'Supervisors'},{id:'chapters',label:'Chapters'},{id:'flags',label:'Flags'},{id:'view',label:'Features'}];
@@ -3721,7 +3769,7 @@
         if(settingsActiveTab==='owner'){
           panelHtml='<div class="settings-tab-panel"><p class="settings-panel-copy">Used on the CAP 741 page footer.</p><div class="settings-grid"><div class="settings-field"><label>Name</label><input class="settings-input" id="settingsOwnerName" type="text" value="'+esc(LOG_OWNER_INFO.name)+'"></div><div class="settings-field"><label>Stamp</label><input class="settings-input" id="settingsOwnerStamp" type="text" value="'+esc(LOG_OWNER_INFO.stamp)+'"></div></div></div>';
         } else if(settingsActiveTab==='view'){
-          panelHtml='<div class="settings-tab-panel"><p class="settings-panel-copy">Control extra page tools, save behavior, and how CAP 741 pages are organized.</p><div class="settings-view-grid"><div class="settings-check-card"><div class="settings-view-card-head"><h3 class="settings-view-card-title">Mind icon</h3><p class="settings-view-card-copy">Show or hide the floating shortcut on the main screen.</p></div><label class="settings-check-main"><span class="settings-switch"><input id="settingsShowMindMap" type="checkbox" aria-label="Mind icon"'+(APP_VIEW_SETTINGS.showMindMap?' checked':'')+'><span class="settings-switch-ui" aria-hidden="true"></span></span></label></div><div class="settings-segment-card"><div class="settings-view-card-head"><h3 class="settings-view-card-title">Page Grouping</h3><p class="settings-view-card-copy">Choose how the printed CAP 741 pages are built and titled.</p></div><div class="settings-toggle-group" role="radiogroup" aria-label="Organize pages by"><label class="settings-toggle-option'+(currentPageGrouping()===PAGE_GROUPING_TYPE?' is-active':'')+'"><input type="radio" name="settingsPageGrouping" value="'+PAGE_GROUPING_TYPE+'"'+(currentPageGrouping()===PAGE_GROUPING_TYPE?' checked':'')+'>Aircraft Type</label><label class="settings-toggle-option'+(currentPageGrouping()===PAGE_GROUPING_GROUP?' is-active':'')+'"><input type="radio" name="settingsPageGrouping" value="'+PAGE_GROUPING_GROUP+'"'+(currentPageGrouping()===PAGE_GROUPING_GROUP?' checked':'')+'>Aircraft Group</label></div><p class="settings-toggle-current" data-settings-page-grouping-current="1">Selected: '+pageGroupingDisplayLabel(currentPageGrouping())+'</p><p class="settings-toggle-copy">Group mode keeps related aircraft together and shows the aircraft variants from that group in the page header.</p></div><div class="settings-check-card"><div class="settings-view-card-head"><h3 class="settings-view-card-title">Fill empty refs</h3><p class="settings-view-card-copy">When on, empty Chapter Description and Licence No. are completed from references and saved. When off, they stay view-only.</p></div><label class="settings-check-main"><span class="settings-switch"><input id="settingsReferenceOnlySave" type="checkbox" aria-label="Fill empty references"'+(!referenceOnlySaveEnabled()?' checked':'')+'><span class="settings-switch-ui" aria-hidden="true"></span></span></label></div></div>';
+          panelHtml='<div class="settings-tab-panel"><p class="settings-panel-copy">Control extra page tools, save behavior, and how CAP 741 pages are organized.</p><div class="settings-view-grid"><div class="settings-check-card"><div class="settings-view-card-head"><h3 class="settings-view-card-title">Mind icon</h3><p class="settings-view-card-copy">Show or hide the floating shortcut on the main screen.</p></div><label class="settings-check-main"><span class="settings-switch"><input id="settingsShowMindMap" type="checkbox" aria-label="Mind icon"'+(APP_VIEW_SETTINGS.showMindMap?' checked':'')+'><span class="settings-switch-ui" aria-hidden="true"></span></span></label></div><div class="settings-segment-card"><div class="settings-view-card-head"><h3 class="settings-view-card-title">Page Grouping</h3><p class="settings-view-card-copy">Choose how the printed CAP 741 pages are built and titled.</p></div><div class="settings-toggle-group" role="radiogroup" aria-label="Organize pages by"><label class="settings-toggle-option'+(currentPageGrouping()===PAGE_GROUPING_TYPE?' is-active':'')+'"><input type="radio" name="settingsPageGrouping" value="'+PAGE_GROUPING_TYPE+'"'+(currentPageGrouping()===PAGE_GROUPING_TYPE?' checked':'')+'>Aircraft Type</label><label class="settings-toggle-option'+(currentPageGrouping()===PAGE_GROUPING_GROUP?' is-active':'')+'"><input type="radio" name="settingsPageGrouping" value="'+PAGE_GROUPING_GROUP+'"'+(currentPageGrouping()===PAGE_GROUPING_GROUP?' checked':'')+'>Aircraft Group</label></div><p class="settings-toggle-current" data-settings-page-grouping-current="1">Selected: '+pageGroupingDisplayLabel(currentPageGrouping())+'</p><p class="settings-toggle-copy">Group mode keeps related aircraft together and shows the aircraft variants from that group in the page header.</p></div><div class="settings-check-card"><div class="settings-view-card-head"><h3 class="settings-view-card-title">Fill empty refs</h3><p class="settings-view-card-copy">When on, empty Chapter Description and Licence No. are completed from references and saved. When off, they stay view-only.</p></div><label class="settings-check-main"><span class="settings-switch"><input id="settingsReferenceOnlySave" type="checkbox" aria-label="Fill empty references"'+(!referenceOnlySaveEnabled()?' checked':'')+'><span class="settings-switch-ui" aria-hidden="true"></span></span></label></div>'+settingsFontCardHtml()+'</div>';
         } else if(settingsActiveTab==='storage'){
           panelHtml='<div class="settings-tab-panel"><p class="settings-panel-copy">See which storage source is connected, import CAP741 data from another source into it, import UltraMain maintenance actions into the current logbook, load prefilled aircraft and supervisor reference data, or migrate the current data between local Excel and Google Sheets.</p><div class="settings-linked-card"><div class="settings-linked-title">Current Linked Storage</div><p class="settings-linked-copy" id="settingsStorageSummary">Checking remembered storage...</p><div class="settings-storage-link" id="settingsStorageLinkRow" hidden><a class="settings-storage-anchor" id="settingsStorageLink" href="#" target="_blank" rel="noreferrer noopener"></a><button class="settings-copy-btn" id="settingsCopyStorageLinkBtn" data-settings-copy-link="1" type="button" aria-label="Copy link" title="Copy link"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 9h9v11H9z"></path><path d="M6 4h9v3H8v9H6z"></path></svg></button></div><div class="settings-linked-note" id="settingsStorageNote">Migration copies the current in-browser data to a new source and then switches the app to that source.</div><div class="settings-storage-section"><div class="settings-storage-actions"><button class="settings-secondary-btn" id="loadStorageExcelBtn" data-settings-storage-action="import-excel" type="button">Import Excel File</button><button class="settings-secondary-btn" id="loadStorageGoogleBtn" data-settings-storage-action="import-google" type="button">Import Google Sheet</button><button class="settings-secondary-btn" id="loadStorageUltraMainBtn" data-settings-storage-action="import-ultramain" type="button">Import UltraMain Report</button><button class="settings-secondary-btn" id="loadProtectedAircraftBtn" data-settings-storage-action="import-protected-aircraft" type="button">Load Prefilled A/C Data</button><button class="settings-secondary-btn" id="loadProtectedSupervisorsBtn" data-settings-storage-action="import-protected-supervisors" type="button">Load Prefilled Supervisors</button></div></div><div class="settings-storage-section"><div class="settings-linked-title">Migrate Current Data</div><div class="settings-storage-actions"><button class="settings-secondary-btn" id="migrateToExcelBtn" data-settings-storage-action="migrate-excel" type="button">Migrate To Excel</button><button class="settings-secondary-btn" id="migrateToGoogleBtn" data-settings-storage-action="migrate-google" type="button">Migrate To Google Sheet</button><button class="settings-secondary-btn" id="unlinkWorkbookBtn" data-settings-unlink="1" type="button">Unlink Source</button></div></div></div></div>';
         } else if(settingsActiveTab==='aircraft'){
@@ -3824,7 +3872,7 @@
         if(settingsModal&&settingsModal.className.indexOf('open')!==-1) renderSettingsBody(settingsActiveTab);
       }
       function openSettingsModal(){ if(!settingsModal||!settingsBodyEl) return; renderSettingsBody(settingsActiveTab); settingsModal.className='modal-backdrop open'; }
-      function closeSettingsModal(){ if(settingsModal) settingsModal.className='modal-backdrop'; }
+      function closeSettingsModal(){ syncPageFontSettings(); if(settingsActiveTab==='view') renderAll(); if(settingsModal) settingsModal.className='modal-backdrop'; }
       function addSettingsRow(kind){ var tbody=settingsBodyEl&&settingsBodyEl.querySelector('[data-settings-table="'+kind+'"] tbody'); if(!tbody) return; var rowHtml=kind==='aircraft'?settingsTableRow(['<input type="text" data-col="Group" placeholder="Group">','<input type="text" data-col="A/C Reg" placeholder="G-XXXX">','<input type="text" data-col="Aircraft Type" placeholder="Boeing 777-300ER - GE90">'],kind):(kind==='chapters'?settingsTableRow(['<input type="text" data-col="Chapter" placeholder="e.g. 71">','<input type="text" data-col="Description" placeholder="e.g. Power Plant">'],kind):(kind==='flags'?settingsTableRow([flagSectionSelectHtml(FLAG_SECTION_PRIMARY),'<input type="text" data-col="Flag" placeholder="INSP - Inspections">',settingsFlagColorCell('Gold')],kind):settingsTableRow([supervisorPrintCheckboxHtml(false),'<input type="text" data-col="Signatory Name" placeholder="Name">','<input type="text" data-col="Stamp" placeholder="Stamp">','<input type="text" data-col="License Number" placeholder="Licence No.">','<input type="text" data-col="Scope / Limitations" placeholder="Scope">'],kind))); tbody.insertAdjacentHTML('beforeend',rowHtml); tbody.lastElementChild.querySelector('input[data-col], select[data-col]') && tbody.lastElementChild.querySelector('input[data-col], select[data-col]').focus(); }
       async function saveSettingsFromModal(){
         // Save owner info (only available on owner tab; store from DOM if on that tab, else use cached)
@@ -3834,6 +3882,7 @@
         if(ownerStampEl) LOG_OWNER_INFO.stamp=s(ownerStampEl.value);
         if(settingsActiveTab==='view'){
           APP_VIEW_SETTINGS=cloneAppViewSettings(collectAppViewSettingsFromModal());
+          syncPageFontSettings();
           syncMindMapButtonVisibility();
           syncRowsToReferenceFillMode();
         } else if(settingsActiveTab==='aircraft'){
@@ -4111,6 +4160,12 @@
         }
       });
       if(settingsBodyEl) settingsBodyEl.addEventListener('input',function(ev){
+        var fontInput=ev.target&&ev.target.closest&&ev.target.closest('[data-font-size-setting]');
+        if(fontInput&&settingsActiveTab==='view'){
+          applyPageFontSettings(collectAppViewSettingsFromModal());
+          scheduleLayoutRefresh(120);
+          return;
+        }
         var colorInput=ev.target&&ev.target.closest&&ev.target.closest('[data-col="Color"]');
         if(!colorInput) return;
         var dot=colorInput.parentElement&&colorInput.parentElement.querySelector('.settings-flag-color-dot');
