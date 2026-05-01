@@ -97,6 +97,7 @@
     .c-date{width:9.5%}.c-reg{width:10.5%}.c-job{width:9%}.c-task{width:49%}.c-sup{width:22%}
     .slot { height:var(--slot-h); max-height:var(--slot-h); }
     .slot td { height:var(--slot-h); max-height:var(--slot-h); overflow:hidden; }
+    .slot td.c-sup { overflow:visible; }
     .slot td > .field-input,
     .slot td > .locked-cell,
     .slot td .sup { max-height:100%; overflow:hidden; }
@@ -123,6 +124,7 @@
     .row-lock:hover { background:#eef3f6; border-color:#aab5be; color:#4d5a64; }
     .row-lock.is-signed { border-color:#8d99a3; background:#c6d0d7; color:#31424f; }
     .row-lock.is-signed:hover { background:#bec8d0; border-color:#7e8a95; color:#273844; }
+    .slot td.c-sup .sup { overflow:visible; }
     .sup { position:relative; display:grid; grid-template-columns:5px minmax(0, 1fr) auto; column-gap:0px; row-gap:0px; align-items:start; }
     .sup.has-flags { padding-bottom:12px; }
     .sup .star { font-weight:700; display:block; grid-column:1; grid-row:1; width:10px; margin:0; text-align:left; line-height:1.2; }
